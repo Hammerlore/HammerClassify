@@ -1,0 +1,16 @@
+{
+  "name": "hammerclassify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HammerClassify — KI-gestützte Dokumenten-Klassifizierung (Word/PDF) auf dem hammerpi. Konzept + Design-Mockup, Stand 10.10.2026.",
+  "scripts": {
+    "mockup:build-css": "python3 build_css.py",
+    "mockup:shots": "node mockup/shoot.mjs"
+  },
+  "keywords": [],
+  "author": "Hammerlore",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "playwright": "^1.64.0"
+  }
+}

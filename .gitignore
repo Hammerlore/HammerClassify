@@ -1,0 +1,16 @@
+# Abhängigkeiten
+node_modules/
+
+# Build-Artefakte / Screenshots (werden bei Bedarf neu erzeugt)
+mockup/shots/
+
+# Betriebssystem-/Editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Umgebungsvariablen / Secrets
+.env
+.env.*
