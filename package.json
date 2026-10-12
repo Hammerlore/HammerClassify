@@ -1,9 +1,17 @@
 {
   "name": "hammerclassify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "HammerClassify — KI-gestützte Dokumenten-Klassifizierung (Word/PDF) auf dem hammerpi. Konzept + Design-Mockup, Stand 10.10.2026.",
+  "description": "Hammerlore Softworks — KI-gestützte Dokumenten-Klassifizierung (Word/PDF) auf dem hammerpi. P1: Gerüst (Passkey, Session, CSP, DB).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.15"
+  },
   "scripts": {
+    "start": "node src/server.js",
+    "setup": "node src/setup.js",
+    "test": "node --test test/",
+    "check": "npm test",
     "mockup:build-css": "python3 build_css.py",
     "mockup:shots": "node mockup/shoot.mjs"
   },
@@ -11,6 +19,13 @@
   "author": "Hammerlore",
   "license": "UNLICENSED",
   "dependencies": {
+    "@simplewebauthn/server": "^13.1.1",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@levischuck/tiny-cbor": "^0.2.2",
     "playwright": "^1.64.0"
   }
 }

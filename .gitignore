@@ -1,6 +1,16 @@
 # Abhängigkeiten
 node_modules/
 
+# Laufzeitdaten (DB, Dokumente) — bleiben auf dem hammerpi
+data/
+keys/
+logs/
+
+# Umgebungsvariablen / Secrets
+.env
+.env.*
+!.env.example
+
 # Build-Artefakte / Screenshots (werden bei Bedarf neu erzeugt)
 mockup/shots/
 

@@ -1,0 +1,10 @@
+{
+  "name": "HammerClassify",
+  "short_name": "Classify",
+  "description": "KI-gestützte Dokumenten-Klassifizierung",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1216",
+  "theme_color": "#0f1216",
+  "icons": []
+}
