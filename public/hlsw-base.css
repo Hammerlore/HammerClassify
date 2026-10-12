@@ -1,0 +1,218 @@
+/* ==========================================================================
+   HLSW Basis- und Komponentenschicht
+   Handgeschrieben — im Gegensatz zu dist/ darf diese Datei bearbeitet werden.
+
+   Regel für jede Zeile hier: nur semantische Tokens (--surface, --accent,
+   --text …), niemals Primitive (--navy-800, --amber-500). Nur so funktionieren
+   Theme- und App-Wechsel, ohne dass eine Komponente angefasst werden muss.
+
+   Reihenfolge beim Einbinden:
+     1. fonts/hlsw-fonts.css      (lokale Schriften, kein CDN)
+     2. dist/css/hlsw-tokens.css  (generiert)
+     3. css/hlsw-base.css         (diese Datei)
+     4. deine App-eigenen Styles
+   ========================================================================== */
+
+/* --- Reset, so viel wie nötig --- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img, svg, video { display: block; max-width: 100%; }
+
+/* [hidden] muss jede display-Regel schlagen — sonst blenden Komponenten mit
+   eigenem display (Flex, Grid) das Attribut still aus. */
+[hidden] { display: none !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* --- Grundtypografie --- */
+body {
+  background: var(--bg);
+  color: var(--text-body);
+  font: var(--type-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { color: var(--text); margin: 0; text-wrap: balance; }
+h1 { font: var(--type-h1); letter-spacing: var(--tracking-h1); }
+h2 { font: var(--type-h2); letter-spacing: var(--tracking-h2); }
+h3 { font: var(--type-h3); letter-spacing: var(--tracking-h3); }
+h4 { font: var(--type-h4); }
+p  { margin: 0; max-width: var(--measure); }
+small { font: var(--type-caption); color: var(--text-muted); }
+code, kbd, samp { font-family: var(--font-mono); font-size: 0.88em; }
+
+a {
+  color: var(--accent-text);
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+a:hover { color: var(--accent-hover); }
+
+.hlsw-display-xl { font: var(--type-display-xl); letter-spacing: var(--tracking-display-xl); color: var(--text); }
+.hlsw-display-lg { font: var(--type-display-lg); letter-spacing: var(--tracking-display-lg); color: var(--text); }
+.hlsw-lead       { font: var(--type-body-lg); color: var(--text-body); max-width: var(--measure); }
+.hlsw-overline {
+  font: var(--type-overline);
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.hlsw-muted { color: var(--text-muted); }
+.hlsw-mono  { font: var(--type-mono); font-variant-numeric: tabular-nums; }
+
+/* --- Fokus: sichtbar auf jedem interaktiven Element --- */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-sm);
+}
+
+/* --- Layout --- */
+.hlsw-container { width: 100%; max-width: var(--container-max); margin-inline: auto; padding-inline: var(--gutter); }
+.hlsw-content   { width: 100%; max-width: var(--content-max); margin-inline: auto; padding-inline: var(--gutter); }
+.hlsw-stack     { display: flex; flex-direction: column; gap: var(--space-5); }
+.hlsw-row       { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
+
+/* --- Buttons --------------------------------------------------------------
+   Genau ein .hlsw-btn--accent pro Ansicht: die primäre Handlung. */
+.hlsw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 44px;               /* HLSW-Mindesttrefferfläche */
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard);
+}
+.hlsw-btn:disabled, .hlsw-btn[aria-disabled="true"] { opacity: 0.42; cursor: not-allowed; }
+
+.hlsw-btn--accent  { background: var(--accent); color: var(--accent-on); }
+.hlsw-btn--accent:hover:not(:disabled)  { background: var(--accent-hover); }
+
+.hlsw-btn--primary { background: var(--primary); color: var(--primary-on); border-color: var(--primary); }
+.hlsw-btn--primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+.hlsw-btn--ghost   { background: transparent; color: var(--text); border-color: var(--border-interactive); }
+.hlsw-btn--ghost:hover:not(:disabled)   { background: var(--bg-inset); }
+
+.hlsw-btn--quiet   { background: transparent; color: var(--accent-text); padding-inline: var(--space-3); }
+.hlsw-btn--quiet:hover:not(:disabled)   { text-decoration: underline; }
+
+/* --- Formularfelder --- */
+.hlsw-field { display: flex; flex-direction: column; gap: var(--space-3); }
+.hlsw-field > label { font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text); }
+.hlsw-field input,
+.hlsw-field select,
+.hlsw-field textarea {
+  min-height: 44px;
+  padding: var(--space-4);
+  border: 1px solid var(--border-interactive);   /* 3:1 nach WCAG 1.4.11 */
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+.hlsw-field input::placeholder, .hlsw-field textarea::placeholder { color: var(--text-muted); }
+.hlsw-field input:focus, .hlsw-field select:focus, .hlsw-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.hlsw-field .hlsw-hint  { font: var(--type-caption); color: var(--text-muted); }
+.hlsw-field .hlsw-error { font: var(--type-caption); color: var(--danger); }
+.hlsw-field[data-invalid="true"] input { border-color: var(--danger); }
+
+/* --- Karten --- */
+.hlsw-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Badges: Status immer mit Text, nie nur Farbe --- */
+.hlsw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid;
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.hlsw-badge--accent  { background: var(--accent-subtle);  color: var(--accent-text); border-color: var(--accent-border); }
+.hlsw-badge--success { background: var(--success-surface); color: var(--success); border-color: var(--success-border); }
+.hlsw-badge--warning { background: var(--warning-surface); color: var(--warning); border-color: var(--warning-border); }
+.hlsw-badge--danger  { background: var(--danger-surface);  color: var(--danger);  border-color: var(--danger-border); }
+.hlsw-badge--info    { background: var(--info-surface);    color: var(--info);    border-color: var(--info-border); }
+.hlsw-badge--neutral { background: var(--bg-inset);        color: var(--text-muted); border-color: var(--border); }
+
+/* --- Hinweisflächen --- */
+.hlsw-alert {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+}
+.hlsw-alert > .hlsw-alert-dot {
+  flex: 0 0 auto;
+  width: 9px; height: 9px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.hlsw-alert strong { display: block; font-weight: 600; margin-bottom: 2px; }
+.hlsw-alert--success { background: var(--success-surface); border-color: var(--success-border); color: var(--success); }
+.hlsw-alert--warning { background: var(--warning-surface); border-color: var(--warning-border); color: var(--warning); }
+.hlsw-alert--danger  { background: var(--danger-surface);  border-color: var(--danger-border);  color: var(--danger); }
+.hlsw-alert--info    { background: var(--info-surface);    border-color: var(--info-border);    color: var(--info); }
+
+/* --- Tabellen --- */
+.hlsw-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.hlsw-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.hlsw-table th {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font: var(--type-overline);
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  text-align: left;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.hlsw-table td { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+.hlsw-table tr:last-child td { border-bottom: 0; }
+
+/* --- Nur für Screenreader --- */
+.hlsw-sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* --- Bewegung respektieren --- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
