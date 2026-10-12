@@ -28,3 +28,8 @@ Regeln, Scan sowie Dokument-Detail und Upload-Dialog, in Dark/Light und mobil.
 
 Siehe `konzept.md` — Repo-Struktur, API, Datenbank-Schema, OMLX-Anbindung,
 systemd-Betrieb auf dem hammerpi.
+
+## Weiterarbeiten
+
+`Next-steps.md` ist die Übergabe-Datei für die nächste Session: aktueller
+P1-Stand, offene Punkte, Deploy-Anleitung, offene Entscheidungen.
