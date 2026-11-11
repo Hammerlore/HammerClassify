@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { encodeCBOR } from '@levischuck/tiny-cbor';
 
-import { openDb, createNutzer, addPasskey, createSession, getSessionByToken, deleteSessionByToken, deleteSessionsExceptPasskey, countPasskeys, getPasskeysForUser } from '../src/db.js';
+import { openDb, createNutzer, addPasskey, createSession, getSessionByToken, deleteSessionByToken, deleteSessionsExceptPasskey } from '../src/db.js';
 import * as auth from '../src/auth.js';
 import { createApp } from '../src/server.js';
 
@@ -28,9 +28,10 @@ const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest();
 function coseKeyFromJwk(jwk) {
   const key = new Map();
   key.set(1, 2); // kty: EC2
-  key.set(3, 1); // alg: ES256
-  key.set(-1, new Uint8Array(Buffer.from(jwk.x, 'base64url')));
-  key.set(-2, new Uint8Array(Buffer.from(jwk.y, 'base64url')));
+  key.set(3, -7); // alg: ES256
+  key.set(-1, 1); // crv: P-256
+  key.set(-2, new Uint8Array(Buffer.from(jwk.x, 'base64url'))); // x
+  key.set(-3, new Uint8Array(Buffer.from(jwk.y, 'base64url'))); // y
   return key;
 }
 
@@ -49,14 +50,19 @@ function fakeRegistrationResponse({ rpId, origin, challengeB64url, credId, pair,
   const credIdBuf = Buffer.from(credId);
   const authData = Buffer.concat([
     rpIdHash,
-    Buffer.from([0x41]), // UP | AT
-    Buffer.from(aaguid),
-    credIdBuf.length.toString(16).padStart(8, '0').match(/../g).reverse().map((h) => parseInt(h, 16)),
+    Buffer.from([0x45]), // UP | UV | AT
+    Buffer.from([0, 0, 0, 0]), // Signatur-Counter (4 Byte, Big-Endian)
+    Buffer.from(aaguid, 'hex'),
+    Buffer.from([(credIdBuf.length >> 8) & 0xff, credIdBuf.length & 0xff]), // 2 Byte, Big-Endian (WebAuthn-Spec)
     credIdBuf,
     Buffer.from(encodeCBOR(coseKeyFromJwk(pair.jwk))),
   ]);
   const attestationObject = Buffer.from(
-    encodeCBOR({ fmt: 'none', authData: new Uint8Array(authData), sig: null, x509c: null })
+    encodeCBOR(new Map([
+      ['fmt', 'none'],
+      ['attStmt', new Map()],
+      ['authData', new Uint8Array(authData)],
+    ]))
   );
   return {
     id: b64url(credIdBuf),
@@ -69,17 +75,26 @@ function fakeRegistrationResponse({ rpId, origin, challengeB64url, credId, pair,
   };
 }
 
+/**
+ * ECDSA P-256-Signatur: ASN.1 DER (Ecdsa-Sig-Value).
+ * WebAuthn-Spec §6.5.5: Assertion-Signaturen für ES256 MÜSSEN als DER
+ * Ecdsa-Sig-Value kodiert sein (wie bei U2F/CTAP1). Node ≥ 26 kennt
+ * `crypto.sign()` ohne `dsaEncoding`-Option mehr — `createSign` liefert
+ * die Signatur standardmäßig als DER, genau das, was simplewebauthn v13
+ * erwartet (intern in IEEE-P1363 für WebCrypto umgewandelt).
+ */
+
 function fakeAuthenticationResponse({ rpId, origin, challengeB64url, credId, pair, signCount }) {
   const rpIdHash = sha256(Buffer.from(rpId, 'ascii'));
   const authData = Buffer.concat([
     rpIdHash,
-    Buffer.from([0x01]), // UP
+    Buffer.from([0x05]), // UP | UV
     Buffer.from([0, 0, 0, signCount]),
   ]);
   const cd = clientDataJSON('webauthn.get', challengeB64url, origin);
-  const sig = crypto.sign('sha256', Buffer.concat([authData, sha256(cd)]), pair.privateKey, {
-    dsaEncoding: 'ieee-p1363',
-  });
+  const sig = crypto.createSign('sha256')
+    .update(Buffer.concat([authData, sha256(cd)]))
+    .sign(pair.privateKey);
   return {
     id: b64url(Buffer.from(credId)),
     rawId: b64url(Buffer.from(credId)),
@@ -108,7 +123,7 @@ before(() => {
     setupToken: 'test-token-1234567890-xyz',
     sessionDays: 30,
     dataDir: tmp,
-    origin: 'http://localhost:3014',
+    origin: 'http://localhost:3018',
     db,
   };
 });
@@ -150,20 +165,20 @@ test('Auth: Registrierung nur im Erststart oder mit SETUP_TOKEN', async () => {
 test('Auth: vollständige Registrierung + Login + Session', async () => {
   const fresh = openDb(tmp); // eigener Handle, gleicher Stand
   const cfg = { ...config, db: fresh };
-  const uid = createNutzer(fresh, 'Micha');
+  const uid = fresh.prepare('SELECT * FROM users LIMIT 1').get().id; // Ein-Nutzer-Modell: userIdFor() nimmt immer den ersten
 
   // Registrierung
   const pair = makeAuthPair();
-  const credId = crypto.randomBytes(16).toString('base64url');
+  const credId = crypto.randomBytes(16); // rohe Bytes, wie ein echter Authenticator
   const regOpts = await auth.registrationOptions({ config: cfg, setupToken: cfg.setupToken });
   const regResp = fakeRegistrationResponse({
     rpId: cfg.rpId, origin: cfg.origin,
     challengeB64url: regOpts.options.challenge,
-    credId, pair, aaguid: crypto.randomBytes(32).toString('hex'),
+    credId, pair, aaguid: crypto.randomBytes(16).toString('hex'),
   });
   const reg = await auth.finishRegistration({ config: cfg, expectedOptions: regOpts.options, response: regResp });
   assert.ok(reg.ok, 'Registrierung verifiziert');
-  assert.equal(countPasskeys(fresh), 1);
+  assert.equal(fresh.prepare('SELECT COUNT(*) AS n FROM passkeys WHERE user_id = ? AND credential_id = ?').get(uid, b64url(credId)).n, 1);
 
   // Login
   const authOpts = await auth.authenticationOptions({ config: cfg });

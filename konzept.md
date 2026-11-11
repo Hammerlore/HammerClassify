@@ -187,7 +187,7 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 ## Ausrollen auf dem hammerpi (wie HLSW-Management)
 
 - App: `/mnt/nvme/hammerclassify` (`.git`-frei, `keys/`-Ablage), `.env` 600
-- Prozess: pm2 `hammerclassify`, Fork, Node ≥ 20, Port **3014** (3013 belegt)
+- Prozess: pm2 `hammerclassify`, Fork, Node ≥ 20, Port **3018** (3014/3017 belegt: Tennisrunde, rex — geprüft 11.11.2026)
 - Tunnel: `hamclassify.hammerlore.de` (Vorschlag) im Tunnel `nextcloud`
 - DNS: Cloudflare, CNAME via `cloudflared tunnel route dns`
 - Sicherung: `backup-all.sh` aufnehmen (DB + `data/dokumente/`)
@@ -219,10 +219,11 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 
 ## Offene Punkte (entscheiden vor P1)
 
-1. **Netzwerk-Routing:** hammerpi liegt in 192.168.180.x (Vault), OMLX in
-   192.168.178.x (DreamRouter). Erreichbarkeit hat funktioniert (omlx:8443
-   antwortet von dieser Box aus) — bitte kurz gegenprüfen, dass der hammerpi
-   dieselbe Sicht hat (eine `curl` reicht).
+1. **Netzwerk-Routing: geklärt (11.11.2026).** OMLX antwortet vom hammerpi aus auf
+   `https://omlx.lan.hammerlore.de:8443` (401 ohne Key). Caddy auf dem Mac Studio
+   liegt noch und lässt nur `192.168.180.84` durch — die Vault-Notiz oMLX
+   („entfernt 19.10.") ist veraltet. Offen bleibt: Der Studio schläft nach 1 min,
+   oMLX ist dann nicht erreichbar — der Zustand „KI nicht erreichbar" deckt das ab.
 2. **Domain:** `hamclassify.hammerlore.de` OK? (oder `classify.` / `dokumente.`)
 3. **Scan-Verzeichnisse:** welche Pfade auf dem hammerpi sind die
    Quell-Verzeichnisse? (z. B. `~/Dokumente/Posteingang`, Nextcloud-Sync-Ordner?)
@@ -246,4 +247,4 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
   vom 09.10), die Vorlage verlangt ≥ 20.15 — bitte Node-Version auf dem
   hammerpi prüfen, vor der P1-Annahme.
 - **Porte:** 3000–3003, 3005, 3009–3013, 3333/3334, 3444, 5433–5438, 8081,
-  8720, 9119 belegt; **3014** ist der nächste freie im 30xx-Block.
+  8720, 9119 belegt; **3018** ist der nächste freie im 30xx-Block (geprüft 11.11.2026: 3000–3005, 3008–3017, 3020 belegt).

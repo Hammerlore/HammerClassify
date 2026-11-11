@@ -45,7 +45,7 @@ export async function registrationOptions({ config, setupToken }) {
  */
 export async function finishRegistration({ config, expectedOptions, response }) {
   const verification = await verifyRegistrationResponse({
-    rpID: config.rpId,
+    expectedRPID: config.rpId,
     expectedChallenge: expectedOptions.challenge,
     expectedOrigin: config.origin,
     requireResidentKey: true,
@@ -55,14 +55,15 @@ export async function finishRegistration({ config, expectedOptions, response }) 
   if (!verification.verified) {
     return { ok: false, fehler: verification.fehler ?? 'Verifizierung fehlgeschlagen' };
   }
+  const info = verification.registrationInfo;
   const userId = userIdFor(config);
   const id = db.addPasskey(config.db, userId, {
-    credentialId: verification.credential.credentialID,
-    publicKey: verification.credential.publicKey,
-    signCount: verification.credential.response?.authenticator?.signatureCount ?? 0,
-    aaguid: verification.credential.response?.authenticator?.aaguid,
-    transport: Array.isArray(verification.credential.response?.authenticator?.transports)
-      ? verification.credential.response.authenticator.transports.join(',')
+    credentialId: info.credential.id,
+    publicKey: info.credential.publicKey,
+    signCount: info.credential.counter ?? 0,
+    aaguid: info.aaguid,
+    transport: Array.isArray(info.credential.transports)
+      ? info.credential.transports.join(',')
       : undefined,
   });
   return { ok: true, passkeyId: id };
@@ -106,7 +107,7 @@ export async function finishAuthentication({ config, expectedOptions, response }
     return { ok: false, fehler: 'Unbekannter Passkey' };
   }
   const verification = await verifyAuthenticationResponse({
-    rpID: config.rpId,
+    expectedRPID: config.rpId,
     expectedChallenge: expectedOptions.challenge,
     expectedOrigin: config.origin,
     requireUserVerification: true,
@@ -120,8 +121,8 @@ export async function finishAuthentication({ config, expectedOptions, response }
   if (!verification.verified) {
     return { ok: false, fehler: verification.fehler ?? 'Verifizierung fehlgeschlagen' };
   }
-  if (verification.newSignatureCounter !== undefined) {
-    db.bumpSignCount(config.db, passkey.id, verification.newSignatureCounter);
+  if (verification.authenticationInfo?.newCounter !== undefined) {
+    db.bumpSignCount(config.db, passkey.id, verification.authenticationInfo.newCounter);
   }
   const token = db.createSession(config.db, {
     userId,

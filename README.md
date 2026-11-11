@@ -5,11 +5,14 @@ Single-User, Security-First.
 
 ## Status
 
-**Konzept-Phase (10.10.2026)** — noch kein lauffähiger Server.
+**P1 abgeschlossen (11.11.2026)** — Server lauffähig: Passkey-Login, Session, CSP, DB, Setup-CLI.
+Noch nicht da: Upload/Text (P2), Regeln + KI (P3), Scan + CSV (P4).
 
 | Inhalt | Stand |
 |---|---|
 | [`konzept.md`](konzept.md) | Vollständiges Konzept: Architektur, Regelschema, KI-Workflow, Security-First, Betrieb |
+| [`src/`](src/) | Node-Server (Express, better-sqlite3, WebAuthn), Port 3018 |
+| [`public/`](public/) | PWA: Login gegen echte API, übrige Ansichten noch Mock-Daten |
 | [`mockup/`](mockup/) | Klickbares Design-Mockup (PWA-Template + HLSW-Design-System, echte Tokens, Mock-Daten) |
 
 ## Mockup ansehen

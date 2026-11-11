@@ -18,7 +18,7 @@ function env(name, fallback = undefined) {
 export function loadEnv(overrides = {}) {
   const e = { ...process.env, ...overrides };
   const config = {
-    port: Number(e.PORT ?? 3014),
+    port: Number(e.PORT ?? 3018),
     host: e.HOST ?? '127.0.0.1',
     rpId: e.RP_ID,
     rpName: e.RP_NAME ?? 'HammerClassify',

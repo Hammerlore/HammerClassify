@@ -19,7 +19,7 @@ if (fs.existsSync(envPath)) {
 
 const token = crypto.randomBytes(32).toString('base64url');
 const content = `# HammerClassify — .env (nur auf dem hammerpi, Rechte 600, nie im Repo)
-PORT=3014
+PORT=3018
 HOST=127.0.0.1
 RP_ID=hamclassify.hammerlore.de
 RP_NAME=HammerClassify
