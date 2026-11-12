@@ -29,7 +29,7 @@ const fmtSize = (bytes) => {
 };
 
 const MAX_MB = 25;
-const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip']);
+const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip', 'txt', 'md']);
 
 /* ------------------------------- State --------------------------------- */
 
@@ -398,7 +398,7 @@ function addFiles(fileList) {
     let detail = '';
     if (!ERLAUBTE_EXT.has(ext)) {
       status = 'fehler';
-      detail = `Typ .${ext || '?'} nicht erlaubt (nur .pdf, .docx, .zip)`;
+      detail = `Typ .${ext || '?'} nicht erlaubt (nur .pdf, .docx, .zip, .txt, .md)`;
     } else if (f.size > MAX_MB * 1024 * 1024) {
       status = 'fehler';
       detail = `Zu groß: ${fmtSize(f.size)} (max. ${MAX_MB} MB)`;

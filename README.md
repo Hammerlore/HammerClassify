@@ -7,8 +7,9 @@ kein Internet), Single-User, Security-First.
 ## Status
 
 **P3 abgeschlossen (12.11.2026)** — läuft auf dem Pi: Passkey-Login, Upload
-(Finder-Dialog + Drag&Drop, 25 MB, Magic-Bytes), SHA-256-Dedup, Volltext
-(docx/zip per jszip, PDF per pdf.js im Browser), Dokumente-Liste/Detail/Download,
+(Finder-Dialog + Drag&Drop, 25 MB, Magic-Bytes; .pdf/.docx/.zip/.txt/.md),
+SHA-256-Dedup, Volltext (docx/zip per jszip, PDF per pdf.js im Browser,
+TXT/MD als Klartext direkt), Dokumente-Liste/Detail/Download,
 Regeln (Kategorien + Dokumenttypen als Daten in der DB, CRUD in der App),
 Klassifizierung per KI (OMLX/Qwen3.8-27B) mit strikter Schema-Prüfung
 (unbekannte Felder raus, Tags nur aus dem Regel-Set, Zitate müssen im Volltext

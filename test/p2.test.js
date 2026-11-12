@@ -281,7 +281,7 @@ test('Server: docx-Upload → 201, Text, Datei 600, Duplikat erkannt', async () 
 });
 
 test('Server: falscher Typ → 400, falsche Magic-Bytes → 400, zu groß → 413', async () => {
-  const r1 = await upload('notiz.txt', Buffer.from('hallo'), 'text/plain');
+  const r1 = await upload('bild.jpg', Buffer.from('kein jpg, nur text'), 'image/jpeg');
   assert.equal(r1.status, 400);
   assert.match((await r1.json()).fehler, /Dateityp nicht erlaubt/);
 

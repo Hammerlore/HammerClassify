@@ -6,7 +6,7 @@
      Prompt-Inject-Warnung, Kürzung)
    - DB: rules-Tabelle (Migration 5), Regeln-CRUD, Klassifizierungs-Workflow
    - Server: Regeln-CRUD, Inhaber-Profil, klassifizieren (409/503/422/200
-     gegen Fake-OMLX), bestaetigen, ablehnen
+     gegen Fake-OMLX), bestaetigen, ablehnen, Klartext-Upload (.txt/.md)
    ========================================================================== */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -843,4 +843,73 @@ test('Server: ablehnen → zurück in eingang, Vorschlag verworfen', async () =>
   assert.equal(body.dokument.status, 'eingang');
   assert.equal(body.dokument.klassifizierung, null);
   assert.equal(getDocument(db, dok2Id).klassifizierung, null);
+});
+
+test('Server: Klartext-Dokumente (.txt/.md) — Upload, Text, Klassifizierung', async () => {
+  const txtText = [
+    'Miete Oktober 2026',
+    'Wohnung: Hammerweg 1, 12345 Ort',
+    'Netto: 850,00 €',
+    'An: Micha Hammer, Hammerweg 1, 12345 Ort',
+  ].join('\n');
+  const r1 = await upload('miete_okt.txt', Buffer.from(txtText), 'text/plain');
+  assert.equal(r1.status, 201);
+  const d1 = await r1.json();
+  assert.equal(d1.ext, 'txt');
+  assert.equal(d1.text_status, 'ok');
+  assert.equal(d1.text_vorschau, txtText); // unter 500 Zeichen → vollständig
+  assert.equal('text' in d1, false);
+
+  const mdText = [
+    '# Angebot: Dachsanierung',
+    'Gesamtpreis: 12.500,00 €',
+    'Gültig bis: 31.12.2026',
+    'An: Micha Hammer, Hammerweg 1, 12345 Ort',
+  ].join('\n');
+  const r2 = await upload('angebot.md', Buffer.from(mdText), 'text/markdown');
+  assert.equal(r2.status, 201);
+  const d2 = await r2.json();
+  assert.equal(d2.ext, 'md');
+  assert.equal(d2.text_status, 'ok');
+  assert.match(d2.text_vorschau, /^# Angebot/);
+
+  // Binärer Inhalt mit Text-Erweiterung → 400
+  const r3 = await upload('defekt.txt', Buffer.from([0x00, 0x01, 0x02, 0x03]), 'text/plain');
+  assert.equal(r3.status, 400);
+  assert.match((await r3.json()).fehler, /binär/);
+
+  // Klassifizierung ist format-agnostisch: .txt mit Volltext → Vorschlag
+  fakeOmlx.state.inhalt = JSON.stringify({
+    dokumenttyp: { name: 'Rechnung', konfidenz: 0.8 },
+    kategorien: [{ name: 'Eigenes', konfidenz: 0.7, stellen: ['An: Micha Hammer'] }],
+    absender: 'Hausverwaltung Nord',
+    datum: '2026-10-01',
+    betraege: [{ art: 'netto', wert_cents: 85000 }],
+    beleg_erforderlich: true,
+    kern: 'Miete Oktober 2026',
+    vertrauen_gesamt: 0.75,
+  });
+  const k1 = await fetch(`${base}/api/documents/${d1.id}/klassifizieren`, { method: 'POST', headers: headers() });
+  assert.equal(k1.status, 200);
+  const b1 = await k1.json();
+  assert.equal(b1.dokument.status, 'einzukategorisieren');
+  assert.equal(b1.dokument.klassifizierung.dokumenttyp.name, 'Rechnung');
+  assert.equal(b1.dokument.klassifizierung.kategorien[0].name, 'Eigenes');
+
+  // .md: gleicher Weg
+  fakeOmlx.state.inhalt = JSON.stringify({
+    dokumenttyp: { name: 'Rechnung', konfidenz: 0.6 },
+    kategorien: [{ name: 'Eigenes', konfidenz: 0.6, stellen: ['An: Micha Hammer'] }],
+    absender: 'Dachfirma Süd GmbH',
+    datum: '2026-12-31',
+    betraege: [{ art: 'brutto', wert_cents: 1250000 }],
+    beleg_erforderlich: false,
+    kern: 'Angebot Dachsanierung',
+    vertrauen_gesamt: 0.6,
+  });
+  const k2 = await fetch(`${base}/api/documents/${d2.id}/klassifizieren`, { method: 'POST', headers: headers() });
+  assert.equal(k2.status, 200);
+  const b2 = await k2.json();
+  assert.equal(b2.dokument.klassifizierung.dokumenttyp.name, 'Rechnung');
+  assert.deepEqual(b2.dokument.klassifizierung.betraege, [{ art: 'brutto', wert_cents: 1250000 }]);
 });

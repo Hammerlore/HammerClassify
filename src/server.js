@@ -27,11 +27,13 @@ import { bauePrompt } from './prompt.js';
 /* ------------------------------ Upload --------------------------------- */
 const MAX_DATEI = 25 * 1024 * 1024; // konzept.md: Upload-Quoten 25 MB
 const MAX_TEXT = 2_000_000; // Obergrenze für den gespeicherten Volltext
-const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip']);
+const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip', 'txt', 'md']);
 const MIME = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   zip: 'application/zip',
+  txt: 'text/plain',
+  md: 'text/markdown',
 };
 
 export function createApp(config) {
@@ -190,7 +192,7 @@ export function createApp(config) {
         const name = sanitizeName(datei.filename);
         const ext = (name.split('.').pop() || '').toLowerCase();
         if (!ERLAUBTE_EXT.has(ext)) {
-          return res.status(400).json({ fehler: `Dateityp nicht erlaubt: .${ext} (nur .pdf, .docx, .zip)` });
+          return res.status(400).json({ fehler: `Dateityp nicht erlaubt: .${ext} (nur .pdf, .docx, .zip, .txt, .md)` });
         }
         // Deterministische Plausibilitätsprüfung, bevor etwas gespeichert wird
         if (ext === 'pdf' && !/^%PDF/.test(datei.buffer.subarray(0, 1024).toString('latin1').trimStart())) {
@@ -198,6 +200,10 @@ export function createApp(config) {
         }
         if ((ext === 'docx' || ext === 'zip') && datei.buffer.subarray(0, 2).toString('latin1') !== 'PK') {
           return res.status(400).json({ fehler: `Kein gültiges ${ext.toUpperCase()}-Archiv` });
+        }
+        // Klartext-Typen: Null-Bytes = binärer Inhalt, keine Textdatei
+        if ((ext === 'txt' || ext === 'md') && datei.buffer.includes(0)) {
+          return res.status(400).json({ fehler: 'Keine Textdatei — binärer Inhalt (.txt/.md sind Klartext)' });
         }
         const sha = crypto.createHash('sha256').update(datei.buffer).digest('hex');
         const doppel = findDocumentBySha(config.db, sha);
@@ -211,6 +217,7 @@ export function createApp(config) {
           if (ext === 'docx') textInhalt = await text.extractDocxText(datei.buffer);
           else if (ext === 'zip') textInhalt = await text.extractZipText(datei.buffer);
           else if (ext === 'pdf') textInhalt = (textFeld ?? '').trim();
+          else textInhalt = datei.buffer.toString('utf8').trim(); // txt, md: Klartext direkt
         } catch {
           textInhalt = ''; // defektes/unvollständiges Archiv → manuell
         }
