@@ -157,8 +157,10 @@ das, was die Dokumentenverarbeitung verlangt:
    Jahre (§ 147 AO) — die App kennt das Feld `beleg_erforderlich` und offeriert
    ein Halte-Tag; Löschen nur explizit.
 6. **KI-Abhängigkeit kontrolliert.** OMLX ist eine andere Maschine als der
-   hammerpi (192.168.178.120:8443, LAN). Der API-Key liegt nur in der
-   `.env` (600). Der Server hat eine **Timeout- und Retry-Strategie**
+   hammerpi (192.168.178.120:8443, LAN). Der API-Key liegt nur auf dem
+   hammerpi: in der `.env` (600) oder in den App-Einstellungen (DB,
+   `settings`-Tabelle — die UI überschreibt die `.env`-Werte; seit
+   12.11.2026). Der Server hat eine **Timeout- und Retry-Strategie**
    (Max. 2 Versuche, 120 s) und einen definierten Zustand „KI nicht
    erreichbar — Dokument bleibt ‚imingang'". Die App funktioniert ohne
    OMLX weiter, nur ohne Klassifizierungsvorschläge. Die KI **vermag** nie
@@ -226,7 +228,9 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
    `https://omlx.lan.hammerlore.de:8443` (401 ohne Key). Caddy auf dem Mac Studio
    liegt noch und lässt nur `192.168.180.84` durch — die Vault-Notiz oMLX
    („entfernt 19.10.") ist veraltet. Offen bleibt: Der Studio schläft nach 1 min,
-   oMLX ist dann nicht erreichbar — der Zustand „KI nicht erreichbar" deckt das ab.
+   oMLX ist dann nicht erreichbar — der Zustand „KI nicht erreichbar" deckt das
+   ab; seit 12.11.2026 mit aussagekräftiger Meldung (Timeout/abgelehnt/DNS/…)
+   aus den Einstellungen, statt nur dem nackten Zustand.
 2. **Domain: entschieden (12.11.2026).** `classify.lan.hammerlore.de` — wie
    MoneyMe (`moneyme.lan.`) nur im Heimnetz: Apache + Pi-hole, kein
    Cloudflare-Tunnel, aus dem Internet nicht erreichbar.

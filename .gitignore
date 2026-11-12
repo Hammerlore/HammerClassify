@@ -20,7 +20,3 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
-
-# Umgebungsvariablen / Secrets
-.env
-.env.*
