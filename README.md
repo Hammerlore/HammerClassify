@@ -6,19 +6,22 @@ kein Internet), Single-User, Security-First.
 
 ## Status
 
-**P2 abgeschlossen (12.11.2026)** — läuft auf dem Pi: Passkey-Login, Upload
+**P3 abgeschlossen (12.11.2026)** — läuft auf dem Pi: Passkey-Login, Upload
 (Finder-Dialog + Drag&Drop, 25 MB, Magic-Bytes), SHA-256-Dedup, Volltext
 (docx/zip per jszip, PDF per pdf.js im Browser), Dokumente-Liste/Detail/Download,
-Einstellungen (OMLX-Verbindung mit Verbindungstest).
+Regeln (Kategorien + Dokumenttypen als Daten in der DB, CRUD in der App),
+Klassifizierung per KI (OMLX/Qwen3.8-27B) mit strikter Schema-Prüfung
+(unbekannte Felder raus, Tags nur aus dem Regel-Set, Zitate müssen im Volltext
+vorkommen), Bestätigung/Ablehnung, Inhaber-Profil, Einstellungen (OMLX + Inhaber).
 Design auf MoneyMe-Synchron: Hero/Glas-Dunkelmodus, Amber-Akzent,
 MoneyMe-Shell (Top-Bar, Reiter, Seitenleiste, Bottom-Navigation).
-Noch nicht da: Regeln + KI (P3), Scan + CSV (P4).
+Noch nicht da: Scan + CSV (P4).
 
 | Inhalt | Stand |
 |---|---|
 | [`konzept.md`](konzept.md) | Vollständiges Konzept: Architektur, Regelschema, KI-Workflow, Security-First, Betrieb |
 | [`src/`](src/) | Node-Server (Express, better-sqlite3, WebAuthn, OMLX-Client), Port 3018 |
-| [`public/`](public/) | PWA mit MoneyMe-Design: Login, Übersicht, Dokumente, Einstellungen echt; Regeln/Scan noch Mock bis P3/P4 |
+| [`public/`](public/) | PWA mit MoneyMe-Design: Login, Übersicht, Dokumente, Regeln, Einstellungen echt; Scan noch Mock bis P4 |
 | [`mockup/`](mockup/) | Klickbares Design-Mockup (PWA-Template + HLSW-Design-System, echte Tokens, Mock-Daten) |
 | [`.env.example`](.env.example) | Vorlage für die Umgebungsvariablen (die echte `.env` legt `npm run setup` auf dem Pi an) |
 

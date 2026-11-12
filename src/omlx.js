@@ -8,6 +8,12 @@ import { getSetting } from './db.js';
 
 export const OMLX_TIMEOUT = 10_000; // konzept.md: definiert den Zustand „KI nicht erreichbar"
 
+/* Klassifizierung (konzept.md: „Max. 2 Versuche, 120 s"): 27B auf 128k-Kontext
+   braucht Zeit — der Timeout ist großzügig, die Versuche begrenzt. */
+export const OMLX_KLASSIFIZIERUNG_TIMEOUT = 120_000;
+export const OMLX_MAX_VERSUCHE = 2;
+export const OMLX_MODELL = 'Qwen3.8-27B-MLX-4bit';
+
 /**
  * Effektive OMLX-Konfiguration: DB-Einstellungen schlagen die .env-Werte.
  * @returns {{url: string, key: string, quelle: 'einstellungen'|'env'|null}}
@@ -79,6 +85,77 @@ export async function omlxPruefe(url, key) {
   } catch (e) {
     return fertig(false, grundVonFehler(e, u), meldungVonFehler(e, u));
   }
+}
+
+/**
+ * Klassifizierungs-Aufruf: POST /v1/chat/completions (OpenAI-kompatibel),
+ * JSON-Modus, Temperatur 0. Max. 2 Versuche bei Timeout/Verbindungsfehler
+ * (konzept.md: „Timeout- und Retry-Strategie, Max. 2 Versuche, 120 s").
+ * @returns {Promise<{ok: boolean, grund: string, meldung: string, inhalt?: string, ms: number}>}
+ */
+export async function omlxKlassifiziere(url, key, prompt, model = OMLX_MODELL) {
+  const t0 = Date.now();
+  const fertig = (ok, grund, meldung, extra = {}) => ({
+    ok, grund, meldung, ms: Date.now() - t0, ...extra,
+  });
+
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return fertig(false, 'ungueltige_url', `„${url}“ ist keine gültige URL — OMLX in den Einstellungen prüfen.`);
+  }
+
+  const ziel = `${u.origin}${u.pathname === '/' ? '' : u.pathname}/v1/chat/completions`;
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: 'Du bist ein Dokumenten-Klassifizierer. Antworte ausschließlich mit einem JSON-Objekt.' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0,
+    response_format: { type: 'json_object' },
+    max_tokens: 4096,
+  };
+
+  let letzter = { grund: 'verbindung', meldung: 'Keine Verbindung' };
+  for (let versuch = 1; versuch <= OMLX_MAX_VERSUCHE; versuch++) {
+    try {
+      const r = await fetch(ziel, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key ?? ''}` },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(OMLX_KLASSIFIZIERUNG_TIMEOUT),
+      });
+      if (r.status === 401) {
+        return fertig(false, 'key_ungueltig', 'OMLX hat den Schlüssel abgelehnt (HTTP 401) — in den Einstellungen prüfen.');
+      }
+      if (r.status === 400) {
+        let detail = '';
+        try { detail = (await r.json())?.error?.message ?? ''; } catch { /* rohe Antwort */ }
+        return fertig(false, 'anfrage_abgelehnt', `OMLX hat die Anfrage abgelehnt (HTTP 400): ${detail || 'Details unbekannt'}`);
+      }
+      if (!r.ok) {
+        // 5xx: Modell lädt neu / Server überlastet → nächster Versuch
+        letzter = { grund: `http_${r.status}`, meldung: `OMLX antwortet mit HTTP ${r.status}.` };
+        if (r.status < 500) return fertig(false, letzter.grund, letzter.meldung);
+        continue;
+      }
+      const data = await r.json();
+      const inhalt = data?.choices?.[0]?.message?.content ?? '';
+      if (!inhalt.trim()) {
+        return fertig(false, 'leere_antwort', 'OMLX hat geantwortet, aber ohne Inhalt.');
+      }
+      return fertig(true, 'ok', `Klassifizierung fertig (${Date.now() - t0} ms).`, { inhalt });
+    } catch (e) {
+      // Timeout / Netzwerk: letzter Versuch, dann „KI nicht erreichbar"
+      letzter = { grund: grundVonFehler(e, u), meldung: meldungVonFehler(e, u) };
+      if (versuch < OMLX_MAX_VERSUCHE) {
+        await new Promise((r) => setTimeout(r, 2_000)); // kurze Pause vor dem Retry
+      }
+    }
+  }
+  return fertig(false, letzter.grund, `${letzter.meldung} (nach ${OMLX_MAX_VERSUCHE} Versuchen)`);
 }
 
 function grundVonFehler(e, u) {

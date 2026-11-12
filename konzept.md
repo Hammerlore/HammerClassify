@@ -1,6 +1,6 @@
 # HammerClassify — Konzept
 
-Stand: 12.11.2026 · Status: P1 abgeschlossen (11.11.2026) · Repo: `Hammerlore/HammerClassify`
+Stand: 12.11.2026 · Status: P3 abgeschlossen (12.11.2026) · Repo: `Hammerlore/HammerClassify`
 
 ## Was die App ist
 
@@ -162,7 +162,7 @@ das, was die Dokumentenverarbeitung verlangt:
    `settings`-Tabelle — die UI überschreibt die `.env`-Werte; seit
    12.11.2026). Der Server hat eine **Timeout- und Retry-Strategie**
    (Max. 2 Versuche, 120 s) und einen definierten Zustand „KI nicht
-   erreichbar — Dokument bleibt ‚imingang'". Die App funktioniert ohne
+   erreichbar — Dokument bleibt ‚eingang'". Die App funktioniert ohne
    OMLX weiter, nur ohne Klassifizierungsvorschläge. Die KI **vermag** nie
    eigenmächtig zu löschen, zu verschieben, oder Regeln zu ändern — sie
    liefert ausschließlich Klassifizierungsvorschläge auf bereits vorliegende
@@ -176,7 +176,7 @@ das, was die Dokumentenverarbeitung verlangt:
 
 | Ansicht | Inhalt |
 |---|---|
-| **Übersicht** | Zähler (imingang, einzukategorisieren, mit Beleg), Verteilung der Kategorien (kategorische HLSW-Skala), jüngste 10 Dokumente, KI-Status |
+| **Übersicht** | Zähler (eingang, einzukategorisieren, mit Beleg), Verteilung der Kategorien (kategorische HLSW-Skala), jüngste 10 Dokumente, KI-Status |
 | **Dokumente** | Tabelle: Name, Typ, Kategorien, Absender, Datum, Betrag, Status, Konfidenz. Filter nach Tag/Status, Suche nach Absender/Text, Sortierung. |
 | **Dokument (Detail)** | Seitenansicht: Tags mit Konfidenz-Badges, Absender/Datum/Betrag, `kern`-Zusammenfassung, Belegwesen, dann der Volltext; Buttons „Bestätigen" (Akzent), „Ablehnen", „Nachbearbeiten" |
 | **Regeln** | Liste beider Tag-Arten, Formular (Neu/ändern: Name, Art, Beschreibung, Schlüsselwörter, Bedingungen, Beispiel), „Regel-Set als JSON" (Download), Spalte „Treffs in den letzten 90 Tagen" |
@@ -204,7 +204,7 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 | Phase | Umfang | Abnahmekriterium |
 |---|---|---|
 | **P1: Gerüst** | Repo aus `hlsw-pwa-template` + Management-Server (Passkey, Session, CSP, DB, `data/`, pm2, Apache, Backup) | Anmelden per Passkey auf `classify.lan.hammerlore.de` möglich |
-| **P2: Upload + Text** | Upload PDF/DOCX, Textgewinnung (jszip / pdf.js), Eintrag imingang, Vorschau, Deduplication | 3 echte Dokumente hochladen, Volltext readable |
+| **P2: Upload + Text** | Upload PDF/DOCX, Textgewinnung (jszip / pdf.js), Eintrag eingang, Vorschau, Deduplication | 3 echte Dokumente hochladen, Volltext readable |
 | **P3: Regeln + KI** | Regeln-UI, Prompt-Renderer, OMLX-Client, Schema-Prüfung, Bestätigung/ablehnen, „Neu einordnen" | 20 echte Dokumente ≥ 80 % treffend (manuell abgeglichen), 0 unbekannte Tags |
 | **P4: Scan + CSV** | Verzeichnis-Scan, Queue, CSV-Export, Darstellung | Verzeichnis mit 50 Dateien vollständig durchlaufen |
 

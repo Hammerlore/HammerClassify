@@ -79,16 +79,17 @@
           <div class="v-head">
             <div>
               <h1>Übersicht</h1>
-              <p class="v-sub" id="dash-sub">Dokumente · Regeln ab P3</p>
+              <p class="v-sub" id="dash-sub">Dokumente · Regeln</p>
             </div>
             <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span>Dokumente hochladen</span></button>
           </div>
 
           <div class="kpis">
             <div class="kpi"><span class="l">Dokumente</span><span class="v" data-stat="total">0</span><span class="s" data-note="total">noch keine diese Woche</span></div>
-            <div class="kpi"><span class="l">Imingang</span><span class="v" data-stat="imingang">0</span><span class="s" data-note="imingang">noch nicht eingeordnet</span></div>
+            <div class="kpi"><span class="l">Eingang</span><span class="v" data-stat="eingang">0</span><span class="s" data-note="eingang">noch nicht eingeordnet</span></div>
+            <div class="kpi"><span class="l">Vorschlag</span><span class="v" data-stat="vorschlag">0</span><span class="s" data-note="vorschlag">nichts zu prüfen</span></div>
             <div class="kpi"><span class="l">Ohne Text</span><span class="v" data-stat="keintext">0</span><span class="s" data-note="keintext">Scans — OCR kommt mit V2</span></div>
-            <div class="kpi"><span class="l">Regeln</span><span class="v" data-stat="regeln">10</span><span class="s" data-note="regeln">Beispiele — echte Regeln ab P3</span></div>
+            <div class="kpi"><span class="l">Regeln</span><span class="v" data-stat="regeln">0</span><span class="s" data-note="regeln">noch keine Regeln gepflegt</span></div>
           </div>
 
           <div class="raster">
@@ -96,7 +97,7 @@
               <div class="card-h"><h2>Letzte Dokumente</h2></div>
               <div class="hlsw-table-wrap">
                 <table class="hlsw-table">
-                  <thead><tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="num">Größe</th><th scope="col">Status</th><th scope="col">Datum</th></tr></thead>
+                  <thead><tr><th scope="col">Dokument</th><th scope="col">Kategorie</th><th scope="col">Status</th><th scope="col" class="num">Datum</th></tr></thead>
                   <tbody id="recent-tbody"></tbody>
                 </table>
               </div>
@@ -136,7 +137,7 @@
           <div class="hlsw-card">
             <div class="hlsw-table-wrap">
               <table class="hlsw-table">
-                <thead><tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="num">Größe</th><th scope="col">Status</th><th scope="col">Text</th><th scope="col">Datum</th></tr></thead>
+                <thead><tr><th scope="col">Dokument</th><th scope="col">Kategorie</th><th scope="col">Absender</th><th scope="col" class="num">Datum</th><th scope="col" class="num">Betrag</th><th scope="col">Status</th><th scope="col">Text</th></tr></thead>
                 <tbody id="docs-tbody"></tbody>
               </table>
             </div>
@@ -161,30 +162,38 @@
               <form id="regel-form">
                 <div class="hlsw-field">
                   <label for="r-name">Regel-Name</label>
-                  <input id="r-name" name="name" type="text" placeholder="z. B. Nebenkosten" required>
-                </div>
-                <div class="hlsw-field">
-                  <label for="r-tag">Erzeugtes Tag</label>
-                  <input id="r-tag" name="tag" type="text" placeholder="Nebenkosten" required>
+                  <input id="r-name" name="name" type="text" placeholder="z. B. Nebenkosten" required maxlength="100">
+                  <span class="hlsw-hint">Der Name ist das Tag, das die KI vergeben darf — er muss im Regel-Set eindeutig sein.</span>
                 </div>
                 <div class="hlsw-field">
                   <label for="r-art">Regel-Art</label>
                   <select id="r-art" name="art">
-                    <option value="kategorie">Kategorie (Thema)</option>
-                    <option value="typ">Typ (Rechnung, Angebot …)</option>
-                    <option value="absender">Absender</option>
-                    <option value="bedingung">Bedingung (z. B. Name + Adresse)</option>
+                    <option value="kategorie">Kategorie (Thema: Nebenkosten, Miete, …)</option>
+                    <option value="dokumenttyp">Dokumenttyp (Rechnung, Angebot, Kündigung, …)</option>
                   </select>
                 </div>
                 <div class="hlsw-field">
                   <label for="r-desc">Beschreibung (natürliche Sprache — die KI interpretiert)</label>
-                  <textarea id="r-desc" name="desc" placeholder="Alles rund um Strom, Gas, Wasser, Schornsteinfeger, Müll … — sofern mein Name und meine Adresse darauf stehen."></textarea>
+                  <textarea id="r-desc" name="beschreibung" placeholder="Alles rund um Strom, Gas, Wasser, Schornsteinfeger, Müll …" required></textarea>
                   <span class="hlsw-hint">Die Beschreibung wird zusammen mit dem Dokumententext an die KI übergeben. Je klarer, desto stabiler die Zuordnung.</span>
                 </div>
                 <div class="hlsw-field">
-                  <label for="r-kw">Stichworte (optional, als Anker für die KI)</label>
-                  <input id="r-kw" name="keywords" type="text" placeholder="Strom, Gas, Wasser, Schornsteinfeger, Müll, Grundsteuer">
-                  <span class="hlsw-hint">Komma-getrennt. Die KI prüft zusätzlich: Name + Adresse müssen im Dokument auftauchen.</span>
+                  <label for="r-kw">Schlüsselwörter (optional, als Anker für die KI)</label>
+                  <input id="r-kw" name="schluesselwoerter" type="text" placeholder="Strom, Gas, Wasser, Schornsteinfeger, Müll, Grundsteuer">
+                  <span class="hlsw-hint">Komma-getrennt, max. 50 — die KI beachtet sie zusätzlich zur Beschreibung.</span>
+                </div>
+                <div class="hlsw-field">
+                  <label for="r-bed">Bedingung (optional)</label>
+                  <select id="r-bed" name="bedingung">
+                    <option value="">— keine —</option>
+                    <option value="eigener_name_adresse">Eigener Name oder Adresse muss im Dokument vorkommen</option>
+                  </select>
+                  <span class="hlsw-hint">Wird serverseitig deterministisch geprüft, nicht von der KI: fehlt der Inhaber, wird das Tag verworfen und das in der Bestätigung angezeigt. Inhaber-Profil in den Einstellungen pflegen.</span>
+                </div>
+                <div class="hlsw-field">
+                  <label for="r-ex">Beispiel (optional)</label>
+                  <input id="r-ex" name="beispiel" type="text" placeholder="z. B. „Zweck: Stromlieferung, Zählerstand …"">
+                  <span class="hlsw-hint">Ein echtes Zitat als Exemplar — es kommt in den Prompt.</span>
                 </div>
                 <div class="form-actions">
                   <button class="hlsw-btn hlsw-btn--accent" type="submit">Speichern</button>
@@ -271,6 +280,29 @@
             </div>
 
             <div class="hlsw-card">
+              <div class="card-h"><h2>Inhaber-Profil</h2></div>
+              <p class="inhauber-status" id="inhauber-status">Wird geladen …</p>
+              <form id="inhauber-form">
+                <div class="hlsw-field">
+                  <label for="in-name">Name (wie auf den Dokumenten)</label>
+                  <input id="in-name" name="name" type="text" placeholder="z. B. Michael Hammer" autocomplete="off">
+                </div>
+                <div class="hlsw-field">
+                  <label for="in-adresse">Adresse (Straße, PLZ Ort)</label>
+                  <input id="in-adresse" name="adresse" type="text" placeholder="z. B. Hammerweg 12, 12345 Hammerhausen" autocomplete="off">
+                </div>
+                <div class="hlsw-field">
+                  <label for="in-kundennr">Kundennummer (optional)</label>
+                  <input id="in-kundennr" name="kundennummer" type="text" placeholder="z. B. 4711" autocomplete="off">
+                </div>
+                <div class="form-actions">
+                  <button class="hlsw-btn hlsw-btn--accent" type="submit"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Speichern</span></button>
+                </div>
+              </form>
+              <span class="hlsw-hint">Dient der Regel-Bedingung „eigener Name/Adresse" — der Server prüft deterministisch, ob Name oder Adresse im Dokument vorkommen. Bleibt auf dem hammerpi (Datenbank), nie im Repo.</span>
+            </div>
+
+            <div class="hlsw-card">
               <div class="card-h"><h2>System</h2></div>
               <dl class="felder">
                 <dt>App</dt><dd id="sys-version">—</dd>
@@ -303,10 +335,13 @@
             </div>
             <div class="stack">
               <div class="hlsw-card">
-                <div class="card-h"><h2>Zugeordnete Tags</h2></div>
+                <div class="card-h"><h2>Klassifizierung</h2></div>
                 <div class="tag-list" id="doc-tags"></div>
+                <div class="hlsw-alert hlsw-alert--warning" id="doc-verworfen" hidden></div>
                 <div class="doc-actions">
-                  <button class="hlsw-btn hlsw-btn--accent" id="btn-reclassify" type="button" disabled title="Klassifizierung ab P3 (Regeln + KI)"><svg class="i" aria-hidden="true"><use href="#i-ki"/></svg><span>Neu klassifizieren</span></button>
+                  <button class="hlsw-btn hlsw-btn--accent" id="btn-confirm" type="button" hidden><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Bestätigen</span></button>
+                  <button class="hlsw-btn hlsw-btn--ghost btn-danger" id="btn-reject" type="button" hidden><svg class="i" aria-hidden="true"><use href="#i-x"/></svg><span>Ablehnen</span></button>
+                  <button class="hlsw-btn hlsw-btn--ghost" id="btn-reclassify" type="button" disabled title="Nochmal an die KI geben (überschreibt den Vorschlag)"><svg class="i" aria-hidden="true"><use href="#i-ki"/></svg><span>Neu klassifizieren</span></button>
                   <button class="hlsw-btn hlsw-btn--ghost" id="btn-export" type="button"><svg class="i" aria-hidden="true"><use href="#i-export"/></svg><span>Als .md exportieren</span></button>
                   <button class="hlsw-btn hlsw-btn--ghost" id="btn-download" type="button"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>Original laden</span></button>
                 </div>

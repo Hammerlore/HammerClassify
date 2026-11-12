@@ -268,7 +268,7 @@ test('setSetting: leerer Wert löscht den Eintrag', () => {
 /* -------------------------------- Server -------------------------------- */
 
 test('DB: Migration 3 legt settings-Tabelle an', () => {
-  assert.equal(SCHEMA_STAND, 3);
+  assert.equal(SCHEMA_STAND, 5);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'settings'").get());
 });
 

@@ -1,9 +1,11 @@
 /* ==========================================================================
-   HammerClassify — Client (P2: Upload + Text, MoneyMe-Design)
+   HammerClassify — Client (P3: Regeln + KI, MoneyMe-Design)
    Login: echte WebAuthn-Flüsse gegen /api/auth (P1).
    Dokumente: echte API — Upload (Finder-Dialog + Drag&Drop), Textgewinnung
    (pdf.js im Browser), Deduplication, Liste, Detail, Export.
-   Regeln und Scan bleiben Mock-Darstellung bis P3/P4 (konzept.md Bauplan).
+   Regeln: echte API (CRUD gegen die DB) — Regeln sind Daten, kein Code.
+   KI: Klassifizierung, Bestätigung/ablehnen, „Neu einordnen".
+   Scan bleibt Mock-Darstellung bis P4 (konzept.md Bauplan).
 
    Navigation wie MoneyMe: Hash-Adressen (#uebersicht, #dokumente, …),
    Reiter mit Pille, Seitenleiste ab 1100 px, Bottom-Navigation auf dem Handy.
@@ -32,8 +34,19 @@ const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip']);
 /* ------------------------------- State --------------------------------- */
 
 let docs = [];
+let regeln = [];
+let inhaber = { name: '', adresse: '', kundennummer: '' };
 let aktuellesDok = null;
 let kiStatus = { ok: null, grund: null, ms: null, gecheckt: null }; // ok: null = noch nicht geprüft
+
+/* Status-Workflow (konzept.md): eingang → einzukategorisieren (Vorschlag)
+   → klassifiziert (bestätigt) oder zurück eingang (abgelehnt) / abgelegt. */
+const STATUS = {
+  eingang: { label: 'Eingang', klasse: 'st-eingang' },
+  einzukategorisieren: { label: 'Vorschlag', klasse: 'st-vorschlag' },
+  klassifiziert: { label: 'Klassifiziert', klasse: 'st-klassifiziert' },
+  abgelegt: { label: 'Abgelegt', klasse: 'st-abgelegt' },
+};
 
 /* ------------------------------- API ----------------------------------- */
 
@@ -86,6 +99,26 @@ async function refreshDocs() {
   renderDashboard();
   renderDocs();
   zaeleNav();
+}
+
+async function ladeRegeln() {
+  try {
+    regeln = (await api('/api/rules')).regeln;
+  } catch {
+    regeln = [];
+  }
+  renderRules();
+  renderDashboard();
+  zaeleNav();
+}
+
+async function ladeInhaber() {
+  try {
+    inhaber = (await api('/api/inhaber')).inhaber;
+  } catch {
+    inhaber = { name: '', adresse: '', kundennummer: '' };
+  }
+  renderEinstellungen();
 }
 
 /* ------------------------------- Toast --------------------------------- */
@@ -195,7 +228,7 @@ async function start() {
   $('#login').hidden = true;
   $('#app').hidden = false;
   render();
-  await refreshDocs();
+  await Promise.all([refreshDocs(), ladeRegeln(), ladeInhaber()]);
   checkKi();
   ladeOmlx();
 }
@@ -258,7 +291,7 @@ function zaeleNav() {
   const cnt = $('#cnt-dokumente');
   if (cnt) cnt.textContent = total ? String(total) : '';
   const cntR = $('#cnt-regeln');
-  if (cntR) cntR.textContent = String(RULES.length);
+  if (cntR) cntR.textContent = String(regeln.length);
 }
 
 function render() {
@@ -319,13 +352,19 @@ async function extractPdfText(file) {
     pdfjsMod.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
   }
   const data = new Uint8Array(await file.arrayBuffer());
-  const doc = await pdfjsMod.getDocument({ data, isEvalSupported: false }).promise;
+  // pdf.js v6: destroy() liegt auf der LoadingTask, nicht auf dem Dokument
+  // (PDFDocumentProxy hat keine destroy() — der alte Aufruf war die Fehlerquelle).
+  const loadingTask = pdfjsMod.getDocument({ data, isEvalSupported: false });
+  const doc = await loadingTask.promise;
   const seiten = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    seiten.push(pageText((await page.getTextContent()).items));
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      seiten.push(pageText((await page.getTextContent()).items));
+    }
+  } finally {
+    await loadingTask.destroy().catch(() => {}); // Worker freigeben, auch bei Fehler
   }
-  await doc.destroy();
   return seiten.join('\n\n').trim();
 }
 
@@ -478,20 +517,25 @@ $('#btn-upload-start').addEventListener('click', async () => {
 
 function renderDashboard() {
   const total = docs.length;
-  const imingang = docs.filter((d) => d.status === 'imingang').length;
+  const eingang = docs.filter((d) => d.status === 'eingang').length;
+  const vorschlag = docs.filter((d) => d.status === 'einzukategorisieren').length;
   const keintext = docs.filter((d) => d.text_status === 'kein_text').length;
   const woche = docs.filter((d) => Date.now() - Date.parse(d.created_at) < 7 * 86400_000).length;
 
   $$('[data-stat="total"]').forEach((el) => (el.textContent = String(total)));
-  $$('[data-stat="imingang"]').forEach((el) => (el.textContent = String(imingang)));
+  $$('[data-stat="eingang"]').forEach((el) => (el.textContent = String(eingang)));
+  $$('[data-stat="vorschlag"]').forEach((el) => (el.textContent = String(vorschlag)));
   $$('[data-stat="keintext"]').forEach((el) => (el.textContent = String(keintext)));
-  $$('[data-stat="regeln"]').forEach((el) => (el.textContent = String(RULES.length)));
+  $$('[data-stat="regeln"]').forEach((el) => (el.textContent = String(regeln.length)));
 
   const notes = {
     total: woche ? `+${woche} diese Woche` : 'noch keine diese Woche',
-    imingang: imingang ? 'warten auf die Einordnung (ab P3)' : 'alle eingeordnet',
+    eingang: eingang ? 'warten auf die Einordnung' : 'alle eingeordnet',
+    vorschlag: vorschlag ? 'KI-Vorschlag — bitte prüfen' : 'nichts zu prüfen',
     keintext: keintext ? 'Scans — OCR kommt mit V2' : 'alle mit Textschicht',
-    regeln: 'Beispiele — echte Regeln ab P3',
+    regeln: regeln.length
+      ? `${regeln.filter((r) => r.art === 'kategorie').length} Kategorien, ${regeln.filter((r) => r.art === 'dokumenttyp').length} Typen`
+      : 'noch keine Regeln gepflegt',
   };
   for (const [key, note] of Object.entries(notes)) {
     const el = $(`[data-note="${key}"]`);
@@ -499,17 +543,44 @@ function renderDashboard() {
   }
 
   const sub = $('#dash-sub');
-  if (sub) sub.textContent = `${total} Dokumente · ${imingang} imingang · Regeln ab P3`;
+  if (sub) {
+    const teile = [`${total} Dokumente`];
+    if (eingang) teile.push(`${eingang} Eingang`);
+    if (vorschlag) teile.push(`${vorschlag} Vorschläge`);
+    sub.textContent = teile.join(' · ');
+  }
 
-  // Kategorien-Verteilung: ab P3
+  // Kategorien-Verteilung: aus den bestätigten Klassifizierungen
   const dist = $('#dist-kat');
-  if (dist) dist.innerHTML = '<p class="dist-empty">Die Kategorien-Verteilung erscheint mit P3 (Regeln + KI-Klassifizierung).</p>';
+  if (dist) {
+    const zaehler = new Map();
+    for (const d of docs) {
+      if (d.status !== 'klassifiziert' || !d.klassifizierung?.kategorien) continue;
+      for (const k of d.klassifizierung.kategorien) {
+        zaehler.set(k.name, (zaehler.get(k.name) ?? 0) + 1);
+      }
+    }
+    const liste = [...zaehler].sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (!liste.length) {
+      dist.innerHTML = '<p class="dist-empty">Noch keine bestätigten Kategorien — Dokumente klassifizieren und bestätigen.</p>';
+    } else {
+      const max = liste[0][1];
+      dist.innerHTML = liste.map(([name, n]) => `
+        <div class="dist-row">
+          <span class="dist-name">${esc(name)}</span>
+          <span class="dist-bar"><span data-dist="${Math.round((n / max) * 100)}"></span></span>
+          <span class="dist-count">${n}</span>
+        </div>`).join('');
+      // Breite per element.style: die CSP verbietet style-Attribute im Markup
+      requestAnimationFrame(() => { $$('#dist-kat [data-dist]').forEach((s) => { s.style.width = `${s.dataset.dist}%`; }); });
+    }
+  }
 
   // Letzte Dokumente
   const tbody = $('#recent-tbody');
   tbody.innerHTML = '';
   if (!docs.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="leer"><p>Noch keine Dokumente — oben oder bei „Dokumente" hochladen.</p></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="leer"><p>Noch keine Dokumente — oben oder bei „Dokumente" hochladen.</p></td></tr>';
   } else {
     for (const d of docs.slice(0, 5)) tbody.appendChild(docRow(d, true));
   }
@@ -585,6 +656,20 @@ function renderEinstellungen() {
   $('#sys-origin').textContent = location.origin;
   zeigeOmlxStatus();
   if (!omlxStatus) testOmlx(); // beim ersten Betreten: aktuellen Zustand zeigen
+
+  // Inhaber-Profil: dient der Bedingung „eigener_name_adresse" (serverseitig geprüft).
+  // elements[...]: form.name wäre das Name-Attribut des Formulars (Web-IDL-Shadowing),
+  // nicht das Eingabefeld namens „name".
+  const inForm = $('#inhauber-form');
+  if (inForm) {
+    const el = inForm.elements;
+    if (document.activeElement !== el['name']) el['name'].value = inhaber.name ?? '';
+    if (document.activeElement !== el['adresse']) el['adresse'].value = inhaber.adresse ?? '';
+    if (document.activeElement !== el['kundennummer']) el['kundennummer'].value = inhaber.kundennummer ?? '';
+    $('#inhauber-status').textContent = (inhaber.name || inhaber.adresse)
+      ? 'Gepflegt — Regeln mit der Bedingung „eigener Name/Adresse" werden geprüft.'
+      : 'Nicht gepflegt — Regeln mit der Bedingung „eigener Name/Adresse" werden verworfen.';
+  }
 }
 
 function zeigeOmlxStatus() {
@@ -630,6 +715,19 @@ $('#omlx-form').addEventListener('submit', async (e) => {
   }
 });
 
+$('#inhauber-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    const r = await api('/api/inhaber', { method: 'PUT', body: { name: f.elements['name'].value, adresse: f.elements['adresse'].value, kundennummer: f.elements['kundennummer'].value } });
+    inhaber = r.inhaber;
+    toast('Inhaber-Profil gespeichert.');
+    renderEinstellungen();
+  } catch (err) {
+    fehlerToast(err);
+  }
+});
+
 /* ------------------------------ Dokumente ------------------------------ */
 
 let filterStatus = null;
@@ -650,17 +748,18 @@ function renderFilters() {
   const sep = document.createElement('span');
   sep.className = 'filter-sep';
   host.appendChild(sep);
-  host.appendChild(chip('Imingang', filterStatus === 'imingang', () => {
-    filterStatus = filterStatus === 'imingang' ? null : 'imingang';
-    renderFilters();
-    renderDocs();
-  }));
+  for (const [key, s] of Object.entries(STATUS)) {
+    host.appendChild(chip(s.label, filterStatus === key, () => {
+      filterStatus = filterStatus === key ? null : key;
+      renderFilters();
+      renderDocs();
+    }));
+  }
 }
 
 function statusBadge(d) {
-  const k = d.status === 'imingang' ? 'imingang' : d.status === 'abgelegt' ? 'abgelegt' : 'klasse';
-  const label = d.status === 'imingang' ? 'Imingang' : d.status === 'abgelegt' ? 'Abgelegt' : 'Klassifiziert';
-  return `<span class="hlsw-badge st-${k}">${label}</span>`;
+  const s = STATUS[d.status] ?? { label: d.status, klasse: 'st-abgelegt' };
+  return `<span class="hlsw-badge ${s.klasse}">${esc(s.label)}</span>`;
 }
 
 function textBadge(d) {
@@ -669,16 +768,32 @@ function textBadge(d) {
   return '<span class="hlsw-badge hlsw-badge--neutral">—</span>';
 }
 
+// Kurze Anzeige der Klassifizierung für die Tabellen
+const katKurz = (d) => d.klassifizierung?.kategorien?.map((k) => esc(k.name)).join(', ') || '';
+const typKurz = (d) => d.klassifizierung?.dokumenttyp?.name ? esc(d.klassifizierung.dokumenttyp.name) : '';
+const betragKurz = (d) => {
+  const b = d.klassifizierung?.betraege?.find((x) => x.art === 'brutto') ?? d.klassifizierung?.betraege?.[0];
+  return b ? `${(b.wert_cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €` : '';
+};
+
 function docRow(d, compact) {
   const tr = document.createElement('tr');
   tr.className = 'klick';
-  tr.innerHTML = `
-    <td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${fmtSize(d.size)}</span></a></td>
-    <td>${d.ext.toUpperCase()}</td>
-    <td class="num">${fmtSize(d.size)}</td>
+  const kategorieZellen = `<td>${katKurz(d) || '<span class="leer-zelle">—</span>'}</td>`;
+  tr.innerHTML = compact
+    ? `
+    <td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${typKurz(d) || d.ext.toUpperCase()}</span></a></td>
+    ${kategorieZellen}
     <td>${statusBadge(d)}</td>
-    ${compact ? '' : `<td>${textBadge(d)}</td>`}
-    <td class="num">${fmtDate(d.created_at)}</td>`;
+    <td class="num">${fmtDate(d.created_at)}</td>`
+    : `
+    <td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${fmtSize(d.size)}</span></a></td>
+    ${kategorieZellen}
+    <td>${d.klassifizierung?.absender ? esc(d.klassifizierung.absender) : '<span class="leer-zelle">—</span>'}</td>
+    <td class="num">${d.klassifizierung?.datum ? fmtDate(d.klassifizierung.datum) : '<span class="leer-zelle">—</span>'}</td>
+    <td class="num">${betragKurz(d) || '<span class="leer-zelle">—</span>'}</td>
+    <td>${statusBadge(d)}</td>
+    <td>${textBadge(d)}</td>`;
   tr.addEventListener('click', (e) => {
     if (e.target.closest('button, input, select, a')) return;
     location.hash = `#dokument/${d.id}`;
@@ -693,7 +808,8 @@ function renderDocs() {
   const list = docs.filter((d) => {
     if (filterStatus && d.status !== filterStatus) return false;
     if (q) {
-      const hay = `${d.name} ${d.text_vorschau ?? ''}`.toLowerCase();
+      const k = d.klassifizierung ?? {};
+      const hay = `${d.name} ${d.text_vorschau ?? ''} ${k.absender ?? ''} ${(k.kategorien ?? []).map((x) => x.name).join(' ')} ${k.dokumenttyp?.name ?? ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -701,101 +817,55 @@ function renderDocs() {
   for (const d of list) tbody.appendChild(docRow(d, false));
   if (!list.length) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="6" class="leer"><p>${docs.length ? 'Keine Dokumente gefunden.' : 'Noch keine Dokumente — oben hochladen.'}</p></td>`;
+    tr.innerHTML = `<td colspan="7" class="leer"><p>${docs.length ? 'Keine Dokumente gefunden.' : 'Noch keine Dokumente — oben hochladen.'}</p></td>`;
     tbody.appendChild(tr);
   }
   const sub = $('#docs-sub');
-  if (sub) sub.textContent = `${list.length} von ${docs.length} Dokumenten · Regeln ab P3`;
+  if (sub) sub.textContent = `${list.length} von ${docs.length} Dokumenten`;
 }
 
 $('#search').addEventListener('input', renderDocs);
 
 /* ------------------------------- Regeln -------------------------------- */
-/* Mock bis P3: die Regeln-UI (CRUD gegen die DB) kommt mit der Phase
-   „Regeln + KI". Die Karten spiegeln das geplante Regelschema. */
+/* Regeln sind Daten, kein Code (konzept.md): CRUD gegen die DB.
+   Zwei Tag-Arten (kategorie, dokumenttyp), optional die Bedingung
+   „eigener_name_adresse" — die wird serverseitig deterministisch geprüft. */
 
-const RULES = [
-  { id: 'r1', name: 'Nebenkosten', tag: 'Nebenkosten', art: 'kategorie', ref: 'nebenn', treffer: 18,
-    desc: 'Alles rund um Strom, Gas, Wasser, Schornsteinfeger, Müllabfuhr, Grundsteuer — sofern mein Name und meine Adresse darauf zu finden sind.',
-    kw: ['Strom', 'Gas', 'Wasser', 'Abwasser', 'Schornsteinfeger', 'Müll', 'Grundsteuer', 'Nebenkosten'] },
-  { id: 'r2', name: 'Miete', tag: 'Miete', art: 'kategorie', ref: 'miet', treffer: 12,
-    desc: 'Mietrechnungen und Mietverträge meiner Wohnung.',
-    kw: ['Miete', 'Kaltmiete', 'Warmmiete', 'Mietvertrag', 'Mieter'] },
-  { id: 'r3', name: 'Versicherung', tag: 'Versicherung', art: 'kategorie', ref: 'vers', treffer: 9,
-    desc: 'Versicherungsbeiträge, Policen, Versicherungsbilder aller meiner Versicherungen.',
-    kw: ['Versicherung', 'Beitrag', 'Police', 'Haftpflicht', 'Hausrat'] },
-  { id: 'r4', name: 'Telekommunikation', tag: 'Telekommunikation', art: 'kategorie', ref: 'telek', treffer: 8,
-    desc: 'Mobilfunk, Festnetz, Internet, Router — Rechnungen und Angebote.',
-    kw: ['Mobilfunk', 'Festnetz', 'Internet', 'Router', 'Telekom'] },
-  { id: 'r5', name: 'Rechnung', tag: 'Rechnung', art: 'typ', ref: 'rechnung', treffer: 31,
-    desc: 'Dokumente, die eine Zahlung verlangen: Rechnung, Abrechnung, Mahnung, Fälligkeit, Betrag.',
-    kw: ['Rechnung', 'Abrechnung', 'fällig', 'Mahnung', 'Gesamtbetrag'] },
-  { id: 'r6', name: 'Angebot', tag: 'Angebot', art: 'typ', ref: 'angebot', treffer: 6,
-    desc: 'Angebote und Preislisten, die noch keine Zahlung verlangen.',
-    kw: ['Angebot', 'Preisliste', 'Gültig bis', 'netto'] },
-  { id: 'r7', name: 'Kündigung', tag: 'Kündigung', art: 'typ', ref: 'kuend', treffer: 4,
-    desc: 'Kündigungen: eigene oder empfangene, inkl. Fristen.',
-    kw: ['Kündigung', 'kündige', 'kündigen', 'auflösen', 'Frist'] },
-  { id: 'r8', name: 'E.ON', tag: 'E.ON', art: 'absender', ref: 'eon', treffer: 11,
-    desc: 'Alles von E.ON Energie Deutschland GmbH.',
-    kw: ['E.ON', 'E ON'] },
-  { id: 'r9', name: 'VHV', tag: 'VHV', art: 'absender', ref: 'vh', treffer: 7,
-    desc: 'Alles von VHV Versicherung AG.',
-    kw: ['VHV'] },
-  { id: 'r10', name: 'Brief', tag: 'Brief', art: 'typ', ref: 'brief', treffer: 5,
-    desc: 'Eher formlose Schreiben ohne Zahlungsaufforderung: Brief, Info, Hinweis, Postkarte.',
-    kw: ['Sehr geehrte', 'hiermit teilen wir', 'Hinweis', 'Postkarte'] },
-];
-
-const KAT = {
-  nebenn: { label: 'Nebenkosten', klasse: 'kat-teal' },
-  miet: { label: 'Miete', klasse: 'kat-blau' },
-  vers: { label: 'Versicherung', klasse: 'kat-violett' },
-  telek: { label: 'Telekommunikation', klasse: 'kat-pink' },
-  sonst: { label: 'Sonstiges', klasse: 'kat-grau' },
-};
-const ART = {
-  rechnung: { label: 'Rechnung', klasse: 'kat-gruen' },
-  angebot: { label: 'Angebot', klasse: 'kat-oliv' },
-  kuend: { label: 'Kündigung', klasse: 'kat-rot' },
-  brief: { label: 'Brief', klasse: 'kat-grau' },
-};
-const ABSENDER = {
-  eon: { label: 'E.ON Energie', klasse: 'kat-teal' },
-  vh: { label: 'VHV Versicherung', klasse: 'kat-violett' },
-  t: { label: 'Telekom', klasse: 'kat-pink' },
-  wg: { label: 'Wohnungsgesellschaft', klasse: 'kat-blau' },
-  unk: { label: 'Unbekannt', klasse: 'kat-grau' },
-};
-const catVar = (ref, art) => (art === 'kategorie' ? KAT[ref] : art === 'typ' ? ART[ref] : ABSENDER[ref]);
+const REGEL_ART_LABEL = { kategorie: 'Kategorie', dokumenttyp: 'Dokumenttyp' };
+const REGEL_ART_KLASSE = { kategorie: 'kat-teal', dokumenttyp: 'kat-violett' };
 
 function renderRules() {
   const host = $('#rules-list');
   host.innerHTML = '';
-  for (const r of RULES) {
-    const c = catVar(r.ref, r.art);
+  if (!regeln.length) {
+    host.innerHTML = '<div class="rule-card"><p class="dist-empty">Noch keine Regeln gepflegt — oben „Neue Regel" anlegen. Ohne Regeln klassifiziert die KI nur den Dokumenttyp aus dem Text.</p></div>';
+  }
+  for (const r of regeln) {
     const card = document.createElement('div');
     card.className = 'rule-card';
+    const bed = r.bedingung === 'eigener_name_adresse'
+      ? '<span class="hlsw-badge hlsw-badge--warning">Bedingung: eigener Name/Adresse</span>'
+      : '';
     card.innerHTML = `
       <div class="rule-head">
-        <span class="hlsw-badge ${c.klasse}">${r.art === 'kategorie' ? 'Kategorie' : r.art === 'typ' ? 'Typ' : 'Absender'}</span>
+        <span class="hlsw-badge ${REGEL_ART_KLASSE[r.art] ?? 'kat-grau'}">${REGEL_ART_LABEL[r.art] ?? esc(r.art)}</span>
         <h3>${esc(r.name)}</h3>
-        <span class="rule-mock">Beispiel</span>
+        ${bed}
         <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-edit-rule="${r.id}" type="button">Bearbeiten</button>
+        <button class="hlsw-btn hlsw-btn--ghost btn-sm btn-danger" data-del-rule="${r.id}" type="button">Löschen</button>
       </div>
-      <p class="rule-desc">${esc(r.desc)}</p>
-      <div class="kw-row">${r.kw.map((k) => `<span class="kw-chip">${esc(k)}</span>`).join('')}</div>
-      <div class="rule-foot">
-        <span class="hlsw-badge hlsw-badge--neutral">→ Tag: ${esc(r.tag)}</span>
-        <span class="treffer">${r.treffer} Treffer</span>
-      </div>`;
+      <p class="rule-desc">${esc(r.beschreibung)}</p>
+      ${r.schluesselwoerter.length ? `<div class="kw-row">${r.schluesselwoerter.map((k) => `<span class="kw-chip">${esc(k)}</span>`).join('')}</div>` : ''}
+      ${r.beispiel ? `<p class="regel-beispiel">${esc(r.beispiel)}</p>` : ''}`;
     card.querySelector('[data-edit-rule]').addEventListener('click', () => openRuleForm(r));
+    card.querySelector('[data-del-rule]').addEventListener('click', () => loescheRegel(r));
     host.appendChild(card);
   }
   const sub = $('#rules-sub');
   if (sub) {
-    const c = (art) => RULES.filter((r) => r.art === art).length;
-    sub.textContent = `Beispiel-Regeln — die echte Regeln-UI kommt mit P3 · ${RULES.length} Regeln · ${c('kategorie')} Kategorien, ${c('typ')} Typen, ${c('absender')} Absender`;
+    const k = regeln.filter((r) => r.art === 'kategorie').length;
+    const t = regeln.filter((r) => r.art === 'dokumenttyp').length;
+    sub.textContent = `${regeln.length} Regeln · ${k} Kategorien, ${t} Dokumenttypen — Regeln sind Daten in der Datenbank, eine neue Regel gilt sofort`;
   }
 }
 
@@ -804,31 +874,52 @@ function openRuleForm(rule) {
   card.hidden = false;
   $('#regel-form-title').textContent = rule ? `Regel bearbeiten: ${rule.name}` : 'Neue Regel';
   const f = $('#regel-form');
-  f.name.value = rule ? rule.name : '';
-  f.tag.value = rule ? rule.tag : '';
+  f.dataset.id = rule ? String(rule.id) : '';
+  // elements[...]: form.name wäre das Name-Attribut des Formulars (Web-IDL-Shadowing)
+  f.elements['name'].value = rule ? rule.name : '';
   f.art.value = rule ? rule.art : 'kategorie';
-  f.desc.value = rule ? rule.desc : '';
-  f.keywords.value = rule ? rule.kw.join(', ') : '';
+  f.beschreibung.value = rule ? rule.beschreibung : '';
+  f.schluesselwoerter.value = rule ? rule.schluesselwoerter.join(', ') : '';
+  f.bedingung.value = rule?.bedingung ?? '';
+  f.beispiel.value = rule?.beispiel ?? '';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  f.name.focus();
+  f.elements['name'].focus();
+}
+
+async function loescheRegel(rule) {
+  if (!confirm(`Regel „${rule.name}“ wirklich löschen?`)) return;
+  try {
+    await api(`/api/rules/${rule.id}`, { method: 'DELETE' });
+    toast(`Regel „${rule.name}“ gelöscht.`);
+    await ladeRegeln();
+  } catch (e) {
+    fehlerToast(e);
+  }
 }
 
 $('#btn-new-rule').addEventListener('click', () => openRuleForm(null));
 $('#btn-rule-cancel').addEventListener('click', () => { $('#regel-form-card').hidden = true; });
 
-$('#regel-form').addEventListener('submit', (e) => {
+$('#regel-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
-  RULES.push({
-    id: 'r' + (RULES.length + 1),
-    name: f.name.value, tag: f.tag.value, art: f.art.value,
-    ref: f.art.value === 'kategorie' ? 'sonst' : f.art.value === 'typ' ? 'brief' : 'unk',
-    treffer: 0, desc: f.desc.value, kw: f.keywords.value.split(',').map((s) => s.trim()).filter(Boolean),
-  });
-  renderRules();
-  $('#regel-form-card').hidden = true;
-  zaeleNav();
-  toast('Regel gespeichert (Beispiel — die echte Regeln-UI kommt mit P3)');
+  const id = f.dataset.id;
+  const body = {
+    name: f.elements['name'].value,
+    art: f.art.value,
+    beschreibung: f.beschreibung.value,
+    schluesselwoerter: f.schluesselwoerter.value,
+    bedingung: f.bedingung.value,
+    beispiel: f.beispiel.value,
+  };
+  try {
+    const r = await api(id ? `/api/rules/${id}` : '/api/rules', { method: id ? 'PUT' : 'POST', body });
+    toast(id ? 'Regel gespeichert.' : `Regel „${r.regel.name}“ angelegt.`);
+    $('#regel-form-card').hidden = true;
+    await ladeRegeln();
+  } catch (err) {
+    fehlerToast(err);
+  }
 });
 
 /* -------------------------------- Scan --------------------------------- */
@@ -867,6 +958,59 @@ $$('[data-scan-pfad]').forEach((b) => b.addEventListener('click', () => {
 }));
 
 /* ------------------------------ Dokument ------------------------------- */
+/* P3: Tags aus der Klassifizierung (Dokumenttyp, Kategorien mit Zitat-
+   Belegen), verworfene Felder mit Grund, Bestätigen/Ablehnen, „Neu
+   einordnen" — die KI schlägt vor, der Mensch entscheidet (konzept.md). */
+
+const KONF = (k) => (k == null ? '' : `<span class="konf">${Math.round(k * 100)} %</span>`);
+
+function tagBlock(art, name, konfidenz, stellen) {
+  const dot = art === 'dokumenttyp' ? 'd-violett' : 'd-teal';
+  return `
+    <div class="tag-block">
+      <div class="tag-chip" data-art="${art}">
+        <span class="dot ${dot}" aria-hidden="true"></span>
+        <span>${esc(name)}</span>${KONF(konfidenz)}
+      </div>
+      ${stellen?.length ? `<ul class="stellen">${stellen.map((s) => `<li>„${esc(s)}“</li>`).join('')}</ul>` : ''}
+    </div>`;
+}
+
+function renderDocTags() {
+  const k = aktuellesDok?.klassifizierung;
+  const host = $('#doc-tags');
+  const teile = [];
+  if (k?.dokumenttyp) teile.push(tagBlock('dokumenttyp', k.dokumenttyp.name, k.dokumenttyp.konfidenz));
+  for (const kat of k?.kategorien ?? []) teile.push(tagBlock('kategorie', kat.name, kat.konfidenz, kat.stellen));
+  if (!teile.length) {
+    host.innerHTML = '<p class="dist-empty">Noch keine Tags — „Neu klassifizieren" unten: die KI schlägt vor, dann bestätigen oder ablehnen.</p>';
+    return;
+  }
+  host.innerHTML = teile.join('');
+  // Verworfene Felder: die Prüfung erklärt, warum etwas fehlt (Security-First)
+  const box = $('#doc-verworfen');
+  if (k?.verworfen?.length) {
+    box.hidden = false;
+    box.innerHTML = `<p class="verworfen-t">Prüfung: ${k.verworfen.length} Feld${k.verworfen.length > 1 ? 'er' : ''} verworfen</p>
+      <ul>${k.verworfen.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>`;
+  } else {
+    box.hidden = true;
+    box.innerHTML = '';
+  }
+}
+
+function renderDocActions() {
+  const d = aktuellesDok;
+  const vorschlag = d.status === 'einzukategorisieren' && !!d.klassifizierung;
+  const bConfirm = $('#btn-confirm');
+  const bReject = $('#btn-reject');
+  bConfirm.hidden = !vorschlag;
+  bReject.hidden = !vorschlag;
+  const bRe = $('#btn-reclassify');
+  bRe.disabled = !d.text;
+  bRe.title = d.text ? 'Nochmal an die KI geben (überschreibt den Vorschlag)'
+    : 'Kein Volltext — Klassifizierung nur mit Text möglich (Scan? OCR kommt mit V2)';
+}
 
 async function openDoc(id) {
   const inListe = docs.find((x) => x.id === id);
@@ -878,7 +1022,12 @@ async function openDoc(id) {
     d = { ...inListe, text: null };
   }
   aktuellesDok = d;
+  renderDocDetail();
+}
 
+function renderDocDetail() {
+  const d = aktuellesDok;
+  if (!d) return;
   $('#doc-title').textContent = d.name;
   $('#doc-sub').textContent = `${d.ext.toUpperCase()} · ${fmtSize(d.size)} · ${fmtDateTime(d.created_at)}`;
 
@@ -890,15 +1039,15 @@ async function openDoc(id) {
     alert.hidden = true;
   }
 
-  const tagsHost = $('#doc-tags');
-  tagsHost.innerHTML = '<p class="dist-empty">Noch keine Tags — die KI-Klassifizierung kommt mit P3.</p>';
+  renderDocTags();
 
+  const s = STATUS[d.status] ?? { label: d.status };
   $('#doc-meta').innerHTML = `
     <dt>Datei</dt><dd class="mono">${esc(d.name)}</dd>
     <dt>Typ</dt><dd>${d.ext.toUpperCase()} (${esc(d.mime)})</dd>
     <dt>Größe</dt><dd>${fmtSize(d.size)}</dd>
     <dt>SHA-256</dt><dd class="mono">${d.sha256.slice(0, 16)}…</dd>
-    <dt>Status</dt><dd>${d.status === 'imingang' ? 'Imingang' : esc(d.status)}</dd>
+    <dt>Status</dt><dd>${esc(s.label)}</dd>
     <dt>Text</dt><dd>${d.text ? `${d.text.length.toLocaleString('de-DE')} Zeichen` : 'kein Text (Scan?)'}</dd>
     <dt>Hochgeladen</dt><dd>${fmtDateTime(d.created_at)}</dd>`;
 
@@ -915,12 +1064,73 @@ async function openDoc(id) {
     p.textContent = 'Kein Volltext — das Dokument wurde gespeichert, aber keine Textschicht gefunden.';
     text.appendChild(p);
   }
+
+  renderDocActions();
 }
+
+/* Klassifizieren: die KI braucht Zeit (120 s Timeout, max. 2 Versuche) —
+   der Button zeigt den Wartezustand, Fehler (503 KI offline, 422
+   unbrauchbar) kommen als Toast, das Dokument bleibt, wo es ist. */
+async function klassifiziereDok() {
+  const d = aktuellesDok;
+  if (!d) return;
+  const btn = $('#btn-reclassify');
+  const label = btn.querySelector('span');
+  btn.disabled = true;
+  label.textContent = 'Klassifiziere …';
+  try {
+    const r = await api(`/api/documents/${d.id}/klassifizieren`, { method: 'POST' });
+    aktuellesDok = { ...aktuellesDok, ...r.dokument }; // Volltext bleibt lokal erhalten
+    if (r.verworfen?.length) toast(`${r.verworfen.length} Feld${r.verworfen.length > 1 ? 'er' : ''} bei der Prüfung verworfen — Details im Vorschlag.`);
+    else toast('KI-Vorschlag gespeichert — bitte prüfen und bestätigen.');
+  } catch (e) {
+    fehlerToast(e);
+  } finally {
+    label.textContent = 'Neu klassifizieren';
+    renderDocDetail();
+    refreshDocs();
+  }
+}
+
+async function bestaetigeDok() {
+  const d = aktuellesDok;
+  if (!d) return;
+  try {
+    const r = await api(`/api/documents/${d.id}/bestaetigen`, { method: 'POST' });
+    aktuellesDok = { ...aktuellesDok, ...r.dokument };
+    toast('Klassifizierung bestätigt — das Dokument trägt seine Tags.');
+    renderDocDetail();
+    refreshDocs();
+  } catch (e) {
+    fehlerToast(e);
+  }
+}
+
+async function ablehneDok() {
+  const d = aktuellesDok;
+  if (!d) return;
+  try {
+    const r = await api(`/api/documents/${d.id}/ablehnen`, { method: 'POST' });
+    aktuellesDok = { ...aktuellesDok, ...r.dokument };
+    toast('Vorschlag abgelehnt — zurück im Eingang.');
+    renderDocDetail();
+    refreshDocs();
+  } catch (e) {
+    fehlerToast(e);
+  }
+}
+
+$('#btn-reclassify').addEventListener('click', () => klassifiziereDok());
+$('#btn-confirm').addEventListener('click', () => bestaetigeDok());
+$('#btn-reject').addEventListener('click', () => ablehneDok());
 
 // Export als .md: Metadaten + Volltext, clientseitig als Download
 $('#btn-export').addEventListener('click', () => {
   const d = aktuellesDok;
   if (!d) return;
+  const k = d.klassifizierung ?? {};
+  const s = STATUS[d.status] ?? { label: d.status };
+  const euro = (c) => (c / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
   const md = [
     `# ${d.name}`,
     '',
@@ -929,15 +1139,20 @@ $('#btn-export').addEventListener('click', () => {
     `| Typ | ${d.ext.toUpperCase()} |`,
     `| Größe | ${fmtSize(d.size)} |`,
     `| SHA-256 | \`${d.sha256}\` |`,
-    `| Status | ${d.status === 'imingang' ? 'Imingang' : d.status} |`,
+    `| Status | ${s.label} |`,
     `| Hochgeladen | ${fmtDateTime(d.created_at)} |`,
     '',
-    '## Volltext',
-    '',
-    d.text ? '```\n' + d.text + '\n```' : '_Kein Text (Scan?)_',
-    '',
-  ].join('\n');
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  ];
+  if (k.dokumenttyp) md.push(`| Dokumenttyp | ${k.dokumenttyp.name}${k.dokumenttyp.konfidenz != null ? ` (${Math.round(k.dokumenttyp.konfidenz * 100)} %)` : ''} |`);
+  for (const kat of k.kategorien ?? []) md.push(`| Kategorie | ${kat.name}${kat.konfidenz != null ? ` (${Math.round(kat.konfidenz * 100)} %)` : ''} |`);
+  if (k.absender) md.push(`| Absender | ${k.absender} |`);
+  if (k.datum) md.push(`| Datum | ${k.datum} |`);
+  for (const b of k.betraege ?? []) md.push(`| Betrag (${b.art}) | ${euro(b.wert_cents)} |`);
+  if (k.beleg_erforderlich != null) md.push(`| Beleg erforderlich | ${k.beleg_erforderlich ? 'ja' : 'nein'} |`);
+  if (k.kern) md.push(`| Worum geht es | ${k.kern} |`);
+  md.push('', '## Volltext', '', d.text ? '```\n' + d.text + '\n```' : '_Kein Text (Scan?)_', '');
+  const mdText = md.join('\n');
+  const blob = new Blob([mdText], { type: 'text/markdown;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = d.name.replace(/[^\w.\-äöüßÄÖÜ]+/g, '_') + '.md';

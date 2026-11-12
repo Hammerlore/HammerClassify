@@ -9,7 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 
-export const SCHEMA_STAND = 3;
+export const SCHEMA_STAND = 5;
 
 const MIGRATIONEN = {
   1: `
@@ -48,7 +48,7 @@ const MIGRATIONEN = {
       mime         TEXT NOT NULL,
       size         INTEGER NOT NULL,
       sha256       TEXT NOT NULL,
-      status       TEXT NOT NULL DEFAULT 'imingang',
+      status       TEXT NOT NULL DEFAULT 'eingang',
       text         TEXT,
       text_status  TEXT NOT NULL DEFAULT 'offen',
       created_at   TEXT NOT NULL,
@@ -64,6 +64,28 @@ const MIGRATIONEN = {
       value       TEXT NOT NULL,
       updated_at  TEXT NOT NULL
     );
+  `,
+   // Korrektur: Status-Tippfehler „imingang" → „eingang" (konzept.md: „Eingang").
+   // Nur ein UPDATE — die Spalte bleibt, die Werte werden umgeschrieben.
+   4: `
+    UPDATE documents SET status = 'eingang' WHERE status = 'imingang';
+  `,
+   // P3: Regeln (Daten, kein Code) + Klassifizierungsergebnis am Dokument.
+   5: `
+    CREATE TABLE IF NOT EXISTS rules (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      name               TEXT NOT NULL,
+      art                TEXT NOT NULL,
+      beschreibung       TEXT NOT NULL,
+      schluesselwoerter  TEXT,
+      bedingung          TEXT,
+      beispiel           TEXT,
+      created_at         TEXT NOT NULL,
+      updated_at         TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rules_art ON rules(art);
+    ALTER TABLE documents ADD COLUMN klassifizierung TEXT;
+    ALTER TABLE documents ADD COLUMN klassifiziert_am TEXT;
   `,
 };
 
@@ -185,7 +207,7 @@ export function addDocument(db, { name, ext, mime, size, sha256, text, textStatu
   const jetzt = new Date().toISOString();
   const id = db.prepare(`INSERT INTO documents
     (name, ext, mime, size, sha256, status, text, text_status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'imingang', ?, ?, ?, ?)`)
+    VALUES (?, ?, ?, ?, ?, 'eingang', ?, ?, ?, ?)`)
     .run(name, ext, mime, size, sha256, text, textStatus, jetzt, jetzt)
     .lastInsertRowid;
   return getDocument(db, id);
@@ -212,6 +234,87 @@ export function countDocuments(db, status = null) {
 
 export function deleteDocument(db, id) {
   return db.prepare('DELETE FROM documents WHERE id = ?').run(id).changes;
+}
+
+/* -------------------------------- Regeln -------------------------------- */
+/* Regeln sind Daten, kein Code (konzept.md): sie leben in der DB und werden
+   in der App bearbeitet. Zwei Tag-Arten, ein Modell:
+   art: 'kategorie' (Thema) | 'dokumenttyp' (Rechnung, Angebot, …).
+   bedingung: optional 'eigener_name_adresse' (deterministisch geprüft). */
+
+export const REGEL_ARTEN = ['kategorie', 'dokumenttyp'];
+export const REGEL_BEDINGUNGEN = ['eigener_name_adresse'];
+
+function parseRegel(r) {
+  if (!r) return null;
+  let kw = [];
+  try { kw = r.schluesselwoerter ? JSON.parse(r.schluesselwoerter) : []; } catch { /* defektes JSON → leer */ }
+  return { ...r, schluesselwoerter: Array.isArray(kw) ? kw : [] };
+}
+
+export function listRegeln(db, art = null) {
+  const sql = 'SELECT * FROM rules' + (art ? ' WHERE art = ?' : '') + ' ORDER BY art, name';
+  const rows = art ? db.prepare(sql).all(art) : db.prepare(sql).all();
+  return rows.map(parseRegel);
+}
+
+export function getRegel(db, id) {
+  return parseRegel(db.prepare('SELECT * FROM rules WHERE id = ?').get(id));
+}
+
+export function addRegel(db, { name, art, beschreibung, schluesselwoerter, bedingung, beispiel }) {
+  const jetzt = new Date().toISOString();
+  const id = db.prepare(`INSERT INTO rules
+    (name, art, beschreibung, schluesselwoerter, bedingung, beispiel, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(name, art, beschreibung, JSON.stringify(schluesselwoerter ?? []), bedingung ?? null, beispiel ?? null, jetzt, jetzt)
+    .lastInsertRowid;
+  return getRegel(db, id);
+}
+
+export function updateRegel(db, id, { name, art, beschreibung, schluesselwoerter, bedingung, beispiel }) {
+  db.prepare(`UPDATE rules SET
+    name = ?, art = ?, beschreibung = ?, schluesselwoerter = ?, bedingung = ?, beispiel = ?, updated_at = ?
+    WHERE id = ?`)
+    .run(name, art, beschreibung, JSON.stringify(schluesselwoerter ?? []), bedingung ?? null, beispiel ?? null, new Date().toISOString(), id);
+  return getRegel(db, id);
+}
+
+export function deleteRegel(db, id) {
+  return db.prepare('DELETE FROM rules WHERE id = ?').run(id).changes;
+}
+
+/* --------------------------- Klassifizierung --------------------------- */
+/* Das (validierte) KI-Ergebnis wird als JSON in documents.klassifizierung
+   gespeichert. Der Status spiegelt den Freigabe-Workflow (konzept.md):
+     eingang → einzukategorisieren (Vorschlag) → klassifiziert (bestätigt)
+     oder → eingang (abgelehnt) / abgelegt. */
+
+export const DOK_STATUS = ['eingang', 'einzukategorisieren', 'klassifiziert', 'abgelegt'];
+
+export function saveKlassifizierung(db, id, ergebnis) {
+  db.prepare(`UPDATE documents SET
+    status = 'einzukategorisieren', klassifizierung = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(ergebnis), new Date().toISOString(), id);
+}
+
+export function bestaetigeKlassifizierung(db, id) {
+  db.prepare(`UPDATE documents SET
+    status = 'klassifiziert', klassifiziert_am = ?, updated_at = ? WHERE id = ?`)
+    .run(new Date().toISOString(), new Date().toISOString(), id);
+}
+
+export function ablehneKlassifizierung(db, id) {
+  // Zurück in den Eingang, Vorschlag verwerfen (Tags tragen erst nach Bestätigung).
+  db.prepare(`UPDATE documents SET
+    status = 'eingang', klassifizierung = NULL, updated_at = ? WHERE id = ?`)
+    .run(new Date().toISOString(), id);
+}
+
+export function setzeStatus(db, id, status) {
+  if (!DOK_STATUS.includes(status)) throw new Error(`Unbekannter Status: ${status}`);
+  db.prepare('UPDATE documents SET status = ?, updated_at = ? WHERE id = ?')
+    .run(status, new Date().toISOString(), id);
 }
 
 /* ------------------------------- Einstellungen -------------------------- */

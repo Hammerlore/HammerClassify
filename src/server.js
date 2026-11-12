@@ -11,13 +11,18 @@ import { pathToFileURL } from 'node:url';
 import Busboy from 'busboy';
 import { loadEnv, validateEnv, APP_ROOT } from './env.js';
 import {
-  openDb, deleteSession, deleteSessionsExceptPasskey,
+  openDb, deleteSession, deleteSessionByToken, deleteSessionsExceptPasskey,
   addDocument, getDocument, listDocuments, findDocumentBySha, deleteDocument,
+  listRegeln, getRegel, addRegel, updateRegel, deleteRegel,
+  REGEL_ARTEN, REGEL_BEDINGUNGEN,
+  saveKlassifizierung, bestaetigeKlassifizierung, ablehneKlassifizierung,
   getSetting, setSetting,
 } from './db.js';
 import * as auth from './auth.js';
 import * as text from './text.js';
-import { omlxKonfig, omlxPruefe } from './omlx.js';
+import { omlxKonfig, omlxPruefe, omlxKlassifiziere } from './omlx.js';
+import { pruefeErgebnis, parseErgebnisText } from './ergebnis.js';
+import { bauePrompt } from './prompt.js';
 
 /* ------------------------------ Upload --------------------------------- */
 const MAX_DATEI = 25 * 1024 * 1024; // konzept.md: Upload-Quoten 25 MB
@@ -133,10 +138,16 @@ export function createApp(config) {
 
   /* --------------------------- Dokumente (P2) --------------------------- */
 
-  // Listendarstellung: ohne Volltext, dafür kurze Vorschau (Suche/Preview)
+  // Listendarstellung: ohne Volltext, dafür kurze Vorschau (Suche/Preview).
+  // Das Klassifizierungs-Ergebnis (JSON-String) wird geparst mitgeliefert —
+  // die Liste zeigt Kategorien, Absender, Datum, Betrag, Konfidenz.
   const ohneText = (d) => {
-    const { text: _text, ...rest } = d;
-    return { ...rest, text_vorschau: d.text ? d.text.slice(0, 500) : null };
+    const { text: _text, klassifizierung, ...rest } = d;
+    let ergebnis = null;
+    if (klassifizierung) {
+      try { ergebnis = JSON.parse(klassifizierung); } catch { ergebnis = null; }
+    }
+    return { ...rest, text_vorschau: d.text ? d.text.slice(0, 500) : null, klassifizierung: ergebnis };
   };
 
   const idFromParams = (req) => {
@@ -312,6 +323,171 @@ export function createApp(config) {
   app.get('/api/ki/status', requireSession, async (req, res) => {
     const { url, key } = omlxKonfig(config, config.db);
     res.json(await omlxPruefe(url, key));
+  });
+
+  /* ------------------------------ Regeln (P3) ---------------------------- */
+  // Regeln sind Daten, kein Code (konzept.md): CRUD gegen die DB.
+  // Die Validierung ist strikt: die Regeln fließen in den KI-Prompt und in
+  // die Schema-Prüfung — Schmutz hier vergiftet die Klassifizierung.
+
+  const regelFelder = (body) => {
+    const fehler = [];
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    const art = typeof body?.art === 'string' ? body.art.trim() : '';
+    const beschreibung = typeof body?.beschreibung === 'string' ? body.beschreibung.trim() : '';
+    let schluesselwoerter = [];
+    if (Array.isArray(body?.schluesselwoerter)) {
+      schluesselwoerter = body.schluesselwoerter.map((s) => String(s).trim()).filter(Boolean).slice(0, 50);
+    } else if (typeof body?.schluesselwoerter === 'string') {
+      schluesselwoerter = body.schluesselwoerter.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50);
+    }
+    const bedingung = body?.bedingung == null || body.bedingung === '' ? null : String(body.bedingung).trim();
+    const beispiel = body?.beispiel == null || body.beispiel === '' ? null : String(body.beispiel).trim().slice(0, 1000);
+
+    if (!name || name.length > 100) fehler.push('„name“: 1–100 Zeichen');
+    if (!REGEL_ARTEN.includes(art)) fehler.push(`„art“: ${REGEL_ARTEN.join(' | ')}`);
+    if (!beschreibung || beschreibung.length > 2000) fehler.push('„beschreibung“: 1–2000 Zeichen');
+    if (bedingung && !REGEL_BEDINGUNGEN.includes(bedingung)) fehler.push(`„bedingung“: ${REGEL_BEDINGUNGEN.join(' | ')} oder leer`);
+    return { fehler, werte: { name, art, beschreibung, schluesselwoerter, bedingung, beispiel } };
+  };
+
+  app.get('/api/rules', requireSession, (req, res) => {
+    res.json({ regeln: listRegeln(config.db) });
+  });
+
+  app.post('/api/rules', requireSession, (req, res) => {
+    const { fehler, werte } = regelFelder(req.body);
+    if (fehler.length) return res.status(400).json({ fehler: fehler.join('; ') });
+    // Doppelter Name (gleiche Art) → verwirrt die KI und die Schema-Prüfung
+    const doppelt = listRegeln(config.db).some((r) => r.art === werte.art && r.name.toLowerCase() === werte.name.toLowerCase());
+    if (doppelt) return res.status(409).json({ fehler: `Es gibt bereits eine ${werte.art} mit dem Namen „${werte.name}“` });
+    res.status(201).json({ regel: addRegel(config.db, werte) });
+  });
+
+  app.put('/api/rules/:id', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    const vorher = id && getRegel(config.db, id);
+    if (!vorher) return res.status(404).json({ fehler: 'Regel nicht gefunden' });
+    const { fehler, werte } = regelFelder(req.body);
+    if (fehler.length) return res.status(400).json({ fehler: fehler.join('; ') });
+    const doppelt = listRegeln(config.db).some((r) => r.id !== id && r.art === werte.art && r.name.toLowerCase() === werte.name.toLowerCase());
+    if (doppelt) return res.status(409).json({ fehler: `Es gibt bereits eine ${werte.art} mit dem Namen „${werte.name}“` });
+    res.json({ regel: updateRegel(config.db, id, werte) });
+  });
+
+  app.delete('/api/rules/:id', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    if (!id || !deleteRegel(config.db, id)) return res.status(404).json({ fehler: 'Regel nicht gefunden' });
+    res.json({ ok: true });
+  });
+
+  /* --------------------------- Inhaber-Profil (P3) ------------------------ */
+  // Dient der Bedingung `eigener_name_adresse` (deterministisch geprüft) und
+  // erscheint im Prompt verallgemeinert. Nie im Repo: DB auf dem hammerpi.
+
+  const INHABER_LEER = { name: '', adresse: '', kundennummer: '' };
+
+  const inhaberLesen = () => {
+    try {
+      const p = JSON.parse(getSetting(config.db, 'inhauber_profil') ?? '');
+      return {
+        name: typeof p?.name === 'string' ? p.name : '',
+        adresse: typeof p?.adresse === 'string' ? p.adresse : '',
+        kundennummer: typeof p?.kundennummer === 'string' ? p.kundennummer : '',
+      };
+    } catch {
+      return { ...INHABER_LEER };
+    }
+  };
+
+  app.get('/api/inhaber', requireSession, (req, res) => {
+    res.json({ inhaber: inhaberLesen() });
+  });
+
+  app.put('/api/inhaber', requireSession, (req, res) => {
+    const b = req.body ?? {};
+    const str = (x, max) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
+    const inhaber = {
+      name: str(b.name, 150),
+      adresse: str(b.adresse, 300),
+      kundennummer: str(b.kundennummer, 60),
+    };
+    const leer = !inhaber.name && !inhaber.adresse && !inhaber.kundennummer;
+    setSetting(config.db, 'inhauber_profil', leer ? null : JSON.stringify(inhaber));
+    res.json({ ok: true, inhaber });
+  });
+
+  /* ------------------- Klassifizierung (P3): KI + Freigabe ---------------- */
+  // Die KI schlägt vor, der Mensch entscheidet (konzept.md):
+  //   klassifizieren → Vorschlag speichern (Status einzukategorisieren)
+  //   bestaetigen    → finale Tags (Status klassifiziert)
+  //   ablehnen       → Vorschlag verwerfen (Status eingang)
+
+  app.post('/api/documents/:id/klassifizieren', requireSession, async (req, res, next) => {
+    try {
+      const id = idFromParams(req);
+      const dok = id && getDocument(config.db, id);
+      if (!dok) return res.status(404).json({ fehler: 'Dokument nicht gefunden' });
+      if (!dok.text) {
+        return res.status(409).json({ fehler: 'Kein Text im Dokument — Klassifizierung nur mit Volltext möglich (Scan? OCR kommt mit V2)' });
+      }
+
+      const { url, key } = omlxKonfig(config, config.db);
+      if (!url || !key) {
+        return res.status(409).json({ fehler: 'KI nicht konfiguriert — OMLX-URL und Schlüssel in den Einstellungen hinterlegen' });
+      }
+
+      const regeln = listRegeln(config.db);
+      const inhaber = inhaberLesen();
+      const { prompt } = bauePrompt({ volltext: dok.text, regeln, inhaber });
+
+      const ki = await omlxKlassifiziere(url, key, prompt);
+      if (!ki.ok) {
+        // Definierter Zustand „KI nicht erreichbar“ — Dokument bleibt, wo es ist
+        return res.status(503).json({ fehler: ki.meldung, ki });
+      }
+
+      const { objekt, fehler: parseFehler } = parseErgebnisText(ki.inhalt);
+      if (!objekt) {
+        return res.status(422).json({ fehler: `KI-Antwort unbrauchbar: ${parseFehler}`, ki });
+      }
+
+      const { ok, ergebnis, verworfen, fehler: strukturell } = pruefeErgebnis(objekt, {
+        regeln, volltext: dok.text, inhaber,
+      });
+      if (!ok) {
+        // Achtung: „fehler" doppelt im Objekt-Literal würde die Meldung
+        // überschreiben (Shorthand gewinnt) — der Client wirft data.fehler.
+        return res.status(422).json({
+          fehler: 'KI-Ergebnis nach Prüfung leer — nichts verwertbar',
+          verworfen, strukturell, ki,
+        });
+      }
+
+      saveKlassifizierung(config.db, dok.id, { ...ergebnis, verworfen });
+      res.json({ dokument: ohneText(getDocument(config.db, dok.id)), verworfen, ki });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  app.post('/api/documents/:id/bestaetigen', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    const dok = id && getDocument(config.db, id);
+    if (!dok) return res.status(404).json({ fehler: 'Dokument nicht gefunden' });
+    if (!dok.klassifizierung) {
+      return res.status(409).json({ fehler: 'Kein Vorschlag vorhanden — zuerst klassifizieren' });
+    }
+    bestaetigeKlassifizierung(config.db, dok.id);
+    res.json({ dokument: ohneText(getDocument(config.db, dok.id)) });
+  });
+
+  app.post('/api/documents/:id/ablehnen', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    const dok = id && getDocument(config.db, id);
+    if (!dok) return res.status(404).json({ fehler: 'Dokument nicht gefunden' });
+    ablehneKlassifizierung(config.db, dok.id);
+    res.json({ dokument: ohneText(getDocument(config.db, dok.id)) });
   });
 
   /* --------------------------- Statische Seite -------------------------- */

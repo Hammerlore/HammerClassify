@@ -232,9 +232,9 @@ test('text: defektes Zip → validateZip meldet Fehler', async () => {
 /* --------------------------------- DB ----------------------------------- */
 
 test('DB: Migration 2 legt documents-Tabelle an', () => {
-  assert.equal(SCHEMA_STAND, 3);
+  assert.equal(SCHEMA_STAND, 5);
   const v = db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v;
-  assert.equal(v, 3);
+  assert.equal(v, 5);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'documents'").get());
 });
 
@@ -261,7 +261,7 @@ test('Server: docx-Upload → 201, Text, Datei 600, Duplikat erkannt', async () 
   const d1 = await r1.json();
   assert.equal(d1.name, 'Stromabrechnung Q3 2026.docx');
   assert.equal(d1.ext, 'docx');
-  assert.equal(d1.status, 'imingang');
+  assert.equal(d1.status, 'eingang');
   assert.equal(d1.text_status, 'ok');
   assert.ok(d1.text_zeichen > 50);
   assert.equal(d1.text_vorschau.length, 500); // Vorschau gekappt
