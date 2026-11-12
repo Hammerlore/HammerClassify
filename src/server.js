@@ -1,11 +1,12 @@
 /* ==========================================================================
    HammerClassify — Server (P1: Gerüst)
-   Bind auf 127.0.0.1, erreichbar nur über den Cloudflare-Tunnel.
+   Bind auf 127.0.0.1, erreichbar nur über Apache im Heimnetz (classify.lan.hammerlore.de).
    CSP: default-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'
    ========================================================================== */
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { loadEnv, validateEnv, APP_ROOT } from './env.js';
 import { openDb, deleteSession, deleteSessionsExceptPasskey } from './db.js';
 import * as auth from './auth.js';
@@ -132,7 +133,9 @@ function cookieFromHeader(req) {
 
 /* ------------------------------ Start ---------------------------------- */
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Nur starten, wenn direkt aufgerufen (npm start / pm2) — nicht bei Import in Tests.
+// argv[1] ist relativ („src/server.js“): gegen CWD auflösen, sonst passt der Vergleich nie.
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const config = loadEnv();
   const { ok, fehler } = validateEnv(config);
   if (!ok) {
