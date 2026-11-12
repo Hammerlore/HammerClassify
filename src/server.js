@@ -41,6 +41,17 @@ export function createApp(config) {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '1mb' }));
 
+  // Request-Log: Method, Pfad, Status, Dauer — damit sich nachvollziehen lässt,
+  // was im Browser ausgelöst wurde (z. B. „Neu klassifizieren" ohne sichtbares
+  // Ergebnis). Bewusst ohne PII: keine Body-Inhalte, keine Cookies.
+  app.use('/api', (req, res, next) => {
+    const t0 = Date.now();
+    res.on('finish', () => {
+      console.log(`${req.method} ${req.originalUrl} → ${res.statusCode} (${Date.now() - t0} ms)`);
+    });
+    next();
+  });
+
   // Sicherheit: CSP, HSTS, frame-ancestors (konzept.md §Security-First)
   app.use((req, res, next) => {
     res.set('Content-Security-Policy',
@@ -478,19 +489,26 @@ export function createApp(config) {
         return res.status(409).json({ fehler: 'Kein Text im Dokument — Klassifizierung nur mit Volltext möglich (Scan? OCR kommt mit V2)' });
       }
 
+      const regeln = listRegeln(config.db);
+      if (!regeln.length) {
+        // Ohne Regel-Set kann die KI keine gültigen Tags ausgeben — der KI-Aufruf
+        // (bis zu 120 s) wäre vergeblich, das Ergebnis würde komplett verworfen.
+        return res.status(409).json({ fehler: 'Keine Regeln gepflegt — zuerst im Reiter „Regeln" anlegen oder per Import laden' });
+      }
+
       const { url, key } = omlxKonfig(config, config.db);
       if (!url || !key) {
         return res.status(409).json({ fehler: 'KI nicht konfiguriert — OMLX-URL und Schlüssel in den Einstellungen hinterlegen' });
       }
 
-      const regeln = listRegeln(config.db);
       const inhaber = inhaberLesen();
       const { prompt } = bauePrompt({ volltext: dok.text, regeln, inhaber });
 
       const ki = await omlxKlassifiziere(url, key, prompt);
       if (!ki.ok) {
-        // Definierter Zustand „KI nicht erreichbar“ — Dokument bleibt, wo es ist
-        return res.status(503).json({ fehler: ki.meldung, ki });
+        // Definierter Zustand „KI nicht erreichbar“ — Dokument bleibt, wo es ist.
+        // Die Meldung soll klarmachen, dass der Versuch stattgefunden hat.
+        return res.status(503).json({ fehler: `KI gerade nicht erreichbar: ${ki.meldung} — das Dokument bleibt, wie es ist. Bitte später erneut versuchen.`, ki });
       }
 
       const { objekt, fehler: parseFehler } = parseErgebnisText(ki.inhalt);

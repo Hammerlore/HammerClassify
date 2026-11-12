@@ -838,7 +838,7 @@ function renderRules() {
   const host = $('#rules-list');
   host.innerHTML = '';
   if (!regeln.length) {
-    host.innerHTML = '<div class="rule-card"><p class="dist-empty">Noch keine Regeln gepflegt — oben „Neue Regel" anlegen. Ohne Regeln klassifiziert die KI nur den Dokumenttyp aus dem Text.</p></div>';
+    host.innerHTML = '<div class="rule-card"><p class="dist-empty">Noch keine Regeln gepflegt — oben „Neue Regel" anlegen oder per Import laden. Ohne Regeln ist keine Klassifizierung möglich.</p></div>';
   }
   for (const r of regeln) {
     const card = document.createElement('div');

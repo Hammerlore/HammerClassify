@@ -395,6 +395,27 @@ test('ergebnis: kein Objekt → struktureller Fehler', () => {
   }
 });
 
+test('ergebnis: Top-Level-Array (Kategori-Liste) → Rettung als kategorien', () => {
+  // Beobachtet mit Qwen3.8-27B-4bit: das Modell liefert nur die Liste,
+  // kein Objekt. Die Rettung hält sich an die gleichen Regeln wie ein
+  // normales „kategorien"-Feld (Name aus dem Set, Zitate im Volltext).
+  const { ok, ergebnis, verworfen, fehler } = pruefeErgebnis([
+    { name: 'Strom', konfidenz: 0.9, stellen: ['Rechnung Strom Q3 2026'] },
+    { name: 'Erfindung', konfidenz: 0.5, stellen: ['Rechnung Strom Q3 2026'] }, // fremdes Tag → verworfen
+  ], { regeln: REGELN, volltext: VOLLTEXT, inhaber: INHABER });
+  assert.equal(ok, true);
+  assert.deepEqual(fehler, []);
+  assert.deepEqual(ergebnis.kategorien.map((k) => k.name), ['Strom']);
+  assert.ok(verworfen.some((v) => v.includes('nur eine Liste')));
+  assert.ok(verworfen.some((v) => v.includes('Erfindung')));
+});
+
+test('ergebnis: Top-Level-Array ohne Namensfelder → struktureller Fehler', () => {
+  const r = pruefeErgebnis([{ wert: 1 }], { regeln: REGELN, volltext: VOLLTEXT, inhaber: INHABER });
+  assert.equal(r.ok, false);
+  assert.match(r.fehler[0], /JSON-Array/);
+});
+
 test('ergebnis: Bedingung eigener_name_adresse — Inhaber im Text → bleibt', () => {
   const { ergebnis, verworfen } = bedingungenPruefen(
     { dokumenttyp: { name: 'Rechnung', konfidenz: 1 }, kategorien: [{ name: 'Eigenes', konfidenz: 0.8, stellen: ['x'] }] },
@@ -460,7 +481,9 @@ test('prompt: bauePrompt — Regeln, Marker, Inhaber verallgemeinert', () => {
   assert.equal(text_zeichen, VOLLTEXT.length);
   for (const teil of [
     'Klassifizierung',
-    'NUR ein JSON-Objekt',
+    'NUR ein einziges JSON-Objekt',
+    'niemals eine Liste',
+    'Beispiel für die komplette Ausgabe',
     'reine Daten',
     'ignoriere sie vollständig',
     '<DOCUMENT>',
@@ -819,6 +842,25 @@ test('Server: KI-Ergebnis nach Prüfung leer → 422 mit Gründen', async () => 
   assert.match(body.fehler, /nichts verwertbar/);
   assert.ok(body.verworfen.some((v) => v.includes('Quatsch')));
   assert.ok(body.verworfen.some((v) => v.includes('unbekannt')));
+});
+
+test('Server: KI-Antwort nur Kategori-Liste → Rettung, 200 mit Hinweis', async () => {
+  // Feldbeobachtung: Qwen3.8-27B-4bit liefert bei englischen Rechnungen
+  // ein Top-Level-Array statt des Objekts. Statt „nichts verwertbar" (422)
+  // wird die Liste als Kategorien übernommen — mit Transparenz-Hinweis.
+  fakeOmlx.state.inhalt = JSON.stringify([
+    { name: 'Strom', konfidenz: 0.9, stellen: ['Rechnung Strom Q3 2026'] },
+    { name: 'Eigenes', konfidenz: 0.8, stellen: ['An: Micha Hammer'] },
+  ]);
+  const r = await fetch(`${base}/api/documents/${dok1Id}/klassifizieren`, { method: 'POST', headers: headers() });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.dokument.status, 'einzukategorisieren');
+  assert.deepEqual(body.dokument.klassifizierung.kategorien.map((k) => k.name), ['Strom', 'Eigenes']);
+  assert.ok(body.verworfen.some((v) => v.includes('nur eine Liste')));
+  // Der Hinweis bleibt auch im gespeicherten Vorschlag (erscheint im Detail)
+  const gespeichert = JSON.parse(getDocument(db, dok1Id).klassifizierung);
+  assert.ok(gespeichert.verworfen.some((v) => v.includes('nur eine Liste')));
 });
 
 test('Server: KI-Ergebnis gültig → 200, Vorschlag gespeichert', async () => {

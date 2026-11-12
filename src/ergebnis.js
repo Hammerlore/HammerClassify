@@ -103,9 +103,20 @@ export function bedingungenPruefen(ergebnis, { regeln = [], inhaber = null, voll
  *   fehler: strukturelle Probleme, die das ganze Ergebnis unbrauchbar machen.
  */
 export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null } = {}) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!raw || typeof raw !== 'object') {
     return { ok: false, ergebnis: null, verworfen: [], fehler: ['Ergebnis ist kein JSON-Objekt'] };
   }
+  // Kleine Modelle geben gelegentlich nur die Kategori-Liste statt des Objekts
+  // aus (beobachtet mit Qwen3.8-27B-4bit bei englischen Rechnungen). Rettung:
+  // die Liste als „kategorien" übernehmen — jeder Eintrag wird weiterhin
+  // strikt geprüft (Name aus dem Regel-Set, Zitate müssen im Volltext sein).
+  const listRettung = Array.isArray(raw)
+    && raw.length > 0
+    && raw.every((x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.name === 'string');
+  if (Array.isArray(raw) && !listRettung) {
+    return { ok: false, ergebnis: null, verworfen: [], fehler: ['Ergebnis ist ein JSON-Array, aber keine Kategori-Liste'] };
+  }
+  if (listRettung) raw = { kategorien: raw };
 
   const fehler = [];
   const verworfen = [];
@@ -235,6 +246,11 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
   /* Bedingungen: deterministisch (eigener_name_adresse) */
   const { ergebnis: geprueft, verworfen: bedingungsGründe } = bedingungenPruefen(ergebnis, { regeln, inhaber, volltext });
   verworfen.push(...bedingungsGründe);
+
+  if (listRettung) {
+    // Transparenz: der Vorschlag ist unvollständig — das soll der Nutzer sehen.
+    verworfen.push('KI-Antwort war nur eine Liste — als Kategorien übernommen; übrige Felder (Dokumenttyp, Absender, Datum, Beträge) fehlen.');
+  }
 
   const ok = Object.keys(geprueft).some((f) => f !== 'schema' && geprueft[f] != null);
   return { ok, ergebnis: ok ? geprueft : null, verworfen, fehler };
