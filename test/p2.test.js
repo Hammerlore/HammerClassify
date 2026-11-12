@@ -232,9 +232,9 @@ test('text: defektes Zip → validateZip meldet Fehler', async () => {
 /* --------------------------------- DB ----------------------------------- */
 
 test('DB: Migration 2 legt documents-Tabelle an', () => {
-  assert.equal(SCHEMA_STAND, 2);
+  assert.equal(SCHEMA_STAND, 3);
   const v = db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v;
-  assert.equal(v, 2);
+  assert.equal(v, 3);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'documents'").get());
 });
 
@@ -349,5 +349,6 @@ test('Server: pdf.js wird lokal unter /vendor/pdfjs ausgeliefert', async () => {
 test('Server: KI-Status ohne OMLX-Konfiguration → ok:false', async () => {
   const s = await (await fetch(`${base}/api/ki/status`, { headers: headers() })).json();
   assert.equal(s.ok, false);
-  assert.match(s.grund, /OMLX/);
+  assert.equal(s.grund, 'nicht_konfiguriert');
+  assert.match(s.meldung, /OMLX/);
 });

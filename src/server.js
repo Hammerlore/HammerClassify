@@ -13,9 +13,11 @@ import { loadEnv, validateEnv, APP_ROOT } from './env.js';
 import {
   openDb, deleteSession, deleteSessionsExceptPasskey,
   addDocument, getDocument, listDocuments, findDocumentBySha, deleteDocument,
+  getSetting, setSetting,
 } from './db.js';
 import * as auth from './auth.js';
 import * as text from './text.js';
+import { omlxKonfig, omlxPruefe } from './omlx.js';
 
 /* ------------------------------ Upload --------------------------------- */
 const MAX_DATEI = 25 * 1024 * 1024; // konzept.md: Upload-Quoten 25 MB
@@ -257,21 +259,59 @@ export function createApp(config) {
     }
   });
 
+  /* ------------------------------ OMLX (KI) ------------------------------ */
+  // Konfiguration: DB-Einstellungen (UI) überschreiben die .env-Werte.
+  // Der Schlüssel wird nie im Klartext zurückgegeben, nur maskiert.
+
+  app.get('/api/omlx', requireSession, (req, res) => {
+    const { url, key, quelle } = omlxKonfig(config, config.db);
+    res.json({
+      url: url || null,
+      key_gegeben: !!key,
+      key_maskiert: key ? `${key.slice(0, 6)}…${key.slice(-4)}` : null,
+      quelle, // 'einstellungen' | 'env' | null
+    });
+  });
+
+  app.put('/api/omlx', requireSession, (req, res) => {
+    const { url, key } = req.body ?? {};
+    if (typeof url !== 'string' || typeof key !== 'string') {
+      return res.status(400).json({ fehler: '„url“ und „key“ (String) werden erwartet' });
+    }
+    const u = url.trim();
+    if (u) {
+      try {
+        const parsed = new URL(u);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return res.status(400).json({ fehler: 'URL muss mit http:// oder https:// beginnen' });
+        }
+      } catch {
+        return res.status(400).json({ fehler: 'URL ungültig — z. B. https://omlx.lan.hammerlore.de:8443' });
+      }
+    }
+    setSetting(config.db, 'omlx_url', u || null);
+    // Leerer Schlüssel = gespeicherter Wert bleibt (konsistent mit dem Test)
+    if (key.trim()) setSetting(config.db, 'omlx_key', key.trim());
+    res.json({ ok: true });
+  });
+
+  // Verbindungstest: eingegebene Werte testen (leeres Feld = gespeicherter/.env-Wert bleibt).
+  app.post('/api/omlx/test', requireSession, async (req, res) => {
+    const { url, key } = req.body ?? {};
+    const eff = omlxKonfig(config, config.db);
+    const zuTesten = {
+      url: (typeof url === 'string' && url.trim()) ? url.trim() : eff.url,
+      key: (typeof key === 'string' && key.trim()) ? key.trim() : eff.key,
+    };
+    res.json(await omlxPruefe(zuTesten.url, zuTesten.key));
+  });
+
   /* ------------------------------ KI-Status ----------------------------- */
-  // OMLX-Ping: Timeout-Strategie aus konzept.md (definiert „KI nicht erreichbar")
+  // OMLX-Ping mit Timeout-Strategie aus konzept.md (definiert „KI nicht erreichbar")
 
   app.get('/api/ki/status', requireSession, async (req, res) => {
-    if (!config.omlxUrl) return res.json({ ok: false, grund: 'OMLX nicht konfiguriert' });
-    const t0 = Date.now();
-    try {
-      const r = await fetch(`${config.omlxUrl}/v1/models`, {
-        headers: { authorization: `Bearer ${config.omlxKey ?? ''}` },
-        signal: AbortSignal.timeout(10_000),
-      });
-      res.json({ ok: r.ok, ms: Date.now() - t0, grund: r.ok ? undefined : `HTTP ${r.status}` });
-    } catch (e) {
-      res.json({ ok: false, ms: Date.now() - t0, grund: e.name === 'TimeoutError' ? 'Timeout' : e.message });
-    }
+    const { url, key } = omlxKonfig(config, config.db);
+    res.json(await omlxPruefe(url, key));
   });
 
   /* --------------------------- Statische Seite -------------------------- */

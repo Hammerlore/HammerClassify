@@ -114,7 +114,9 @@ dialog::backdrop { background: color-mix(in srgb, var(--hero) 55%, transparent);
 .tabs { display: flex; gap: var(--space-2); padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .tabs a { position: relative; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 12px; color: var(--text-muted); font-weight: 500; font-size: 14.5px; white-space: nowrap; text-decoration: none; border-radius: var(--radius-md); }
 .tabs a:hover { color: var(--text); }
-.tabs .nk, .tabs .nav-gruppe, .tabs .nav-pille, .tabs .nav-schalter, .tabs .nav-ki { display: none; }
+/* Wie bei MoneyMe: nur .nk ist in .tabs gescoped, die übrigen Selector tragen die Basis-Spezifität (0,1,0),
+   damit die Container-Query-Regeln (gleiche Spezifität, später im Blatt) sie wieder einblenden. */
+.tabs .nk, .nav-gruppe, .nav-pille, .nav-schalter, .nav-ki { display: none; }
 .tabs a[aria-current="page"] { color: var(--text); font-weight: 600; }
 .tabs a[aria-current="page"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
 .cnt { font: 600 11px/1 var(--font-body); background: var(--primary); color: var(--primary-on); border-radius: var(--radius-full); padding: 3px 7px; }
@@ -348,6 +350,12 @@ dialog::backdrop { background: color-mix(in srgb, var(--hero) 55%, transparent);
 .progress { height: 6px; border-radius: var(--radius-full); background: var(--bg-inset); overflow: hidden; }
 .progress > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: var(--radius-full); transition: width var(--dur-base) var(--ease-standard); }
 
+/* Einstellungen */
+.einst-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+@container (min-width: 1000px) { .einst-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
+#omlx-form { display: flex; flex-direction: column; gap: var(--space-4); }
+#omlx-status { margin-bottom: var(--space-5); }
+
 /* Upload-Dialog */
 dialog.upload { border: 0; border-radius: var(--radius-xl); padding: 0; max-width: 520px; width: calc(100vw - 32px); margin: auto; }
 .upload-head { display: flex; align-items: center; padding: var(--space-6) var(--space-7) 0; }
@@ -401,7 +409,7 @@ code.cmd { display: block; margin-top: 6px; font: 12.5px var(--font-mono); }
 .mehr-menu a[aria-current="page"] { background: var(--accent-subtle); }
 
 @container (max-width: 900px) {
-  .detail-grid, .regeln-grid, .scan-grid { grid-template-columns: minmax(0, 1fr); }
+  .detail-grid, .regeln-grid, .scan-grid, .einst-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @container (max-width: 760px) {
   .view { padding: var(--space-5) 14px calc(var(--space-12) + 20px); }

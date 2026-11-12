@@ -197,6 +197,7 @@ async function start() {
   render();
   await refreshDocs();
   checkKi();
+  ladeOmlx();
 }
 
 $('#btn-logout').addEventListener('click', async () => {
@@ -223,7 +224,7 @@ $('#btn-logout').addEventListener('click', async () => {
 
 /* --------------------------- Navigation (Hash) -------------------------- */
 
-const TITEL = { uebersicht: 'Übersicht', dokumente: 'Dokumente', regeln: 'Regeln', scan: 'Scan', dokument: 'Dokument' };
+const TITEL = { uebersicht: 'Übersicht', dokumente: 'Dokumente', regeln: 'Regeln', scan: 'Scan', einstellungen: 'Einstellungen', dokument: 'Dokument' };
 const NAV = { dokument: 'dokumente' };
 
 /* Seitenleiste: die Amber-Pille liegt hinter dem aktiven Punkt und gleitet beim Seitenwechsel dorthin.
@@ -268,13 +269,14 @@ function render() {
   $$('.view-seite').forEach((s) => s.classList.toggle('active', s.id === 'view-' + v));
   const nav = NAV[v] || v;
   $$('.tabs a, .unten > a, .mehr-menu a').forEach((a) => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-  $('#unten-mehr')?.classList.toggle('an', ['regeln', 'scan'].includes(nav));
+  $('#unten-mehr')?.classList.toggle('an', ['regeln', 'scan', 'einstellungen'].includes(nav));
   navPille(true);
 
   if (v === 'uebersicht') renderDashboard();
   if (v === 'dokumente') renderDocs();
   if (v === 'regeln') renderRules();
   if (v === 'scan') renderQueue();
+  if (v === 'einstellungen') renderEinstellungen();
   if (v === 'dokument') {
     if (arg) openDoc(arg);
     else location.hash = '#dokumente';
@@ -523,11 +525,13 @@ function renderKiCard() {
     $('#ki-row-text').textContent = 'KI-Status wird geprüft …';
   } else if (kiStatus.ok) {
     row.dataset.ki = 'ok';
-    $('#ki-row-text').textContent = `OMLX erreichbar (${kiStatus.ms} ms)`;
+    $('#ki-row-text').textContent = kiStatus.meldung || `OMLX erreichbar (${kiStatus.ms} ms)`;
   } else {
     row.dataset.ki = 'offline';
-    $('#ki-row-text').textContent = `KI nicht erreichbar${kiStatus.grund ? ` — ${kiStatus.grund}` : ''}`;
+    $('#ki-row-text').textContent = kiStatus.meldung || `KI nicht erreichbar${kiStatus.grund ? ` — ${kiStatus.grund}` : ''}`;
   }
+  const ep = $('#ki-endpoint');
+  if (ep) ep.textContent = omlxCfg.url || 'nicht konfiguriert';
   const g = $('#ki-gecheckt');
   if (g) g.textContent = kiStatus.gecheckt ? `vor ${Math.max(1, Math.round((Date.now() - kiStatus.gecheckt) / 60000))} Min.` : 'noch nicht';
 }
@@ -546,6 +550,85 @@ async function checkKi() {
   if (t) t.textContent = kiStatus.ok ? 'KI bereit' : 'KI offline';
   renderKiCard();
 }
+
+/* ----------------------------- Einstellungen ---------------------------- */
+/* OMLX-Verbindung hinterlegen und testen. Der Schlüssel kommt nie im
+   Klartext zurück (nur maskiert); leeres Feld = gespeicherter Wert bleibt. */
+
+let omlxCfg = { url: null, key_gegeben: false, key_maskiert: null, quelle: null };
+let omlxStatus = null; // Ergebnis des letzten Verbindungstests
+
+async function ladeOmlx() {
+  try {
+    omlxCfg = await api('/api/omlx');
+  } catch {
+    omlxCfg = { url: null, key_gegeben: false, key_maskiert: null, quelle: null };
+  }
+  api('/api/health').then((h) => {
+    const v = $('#sys-version');
+    if (v) v.textContent = `${h.app} v${h.version}`;
+  }).catch(() => { /* egal */ });
+  renderKiCard(); // Endpoint im Dashboard-Card aktualisieren
+  renderEinstellungen();
+}
+
+function renderEinstellungen() {
+  const url = $('#omlx-url');
+  if (!url) return;
+  if (document.activeElement !== url) url.value = omlxCfg.url ?? '';
+  $('#omlx-key-hint').textContent = omlxCfg.key_gegeben
+    ? `Gespeichert: ${omlxCfg.key_maskiert} — leer lassen, um ihn beizubehalten.`
+    : 'Leer lassen, um OMLX_KEY aus der .env zu verwenden (falls dort gesetzt).';
+  $('#sys-omlx-quelle').textContent = omlxCfg.quelle === 'einstellungen' ? 'Einstellungen (in der Datenbank gespeichert)'
+    : omlxCfg.quelle === 'env' ? '.env auf dem Server'
+    : 'nicht konfiguriert';
+  $('#sys-origin').textContent = location.origin;
+  zeigeOmlxStatus();
+  if (!omlxStatus) testOmlx(); // beim ersten Betreten: aktuellen Zustand zeigen
+}
+
+function zeigeOmlxStatus() {
+  const box = $('#omlx-status');
+  if (!box) return;
+  if (!omlxStatus) { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.remove('hlsw-alert--success', 'hlsw-alert--danger', 'hlsw-alert--info');
+  box.classList.add(omlxStatus.ok ? 'hlsw-alert--success'
+    : omlxStatus.grund === 'nicht_konfiguriert' ? 'hlsw-alert--info'
+    : 'hlsw-alert--danger');
+  $('#omlx-status-text').textContent = omlxStatus.meldung;
+}
+
+function testOmlx() {
+  const btn = $('#btn-omlx-test');
+  const label = btn?.querySelector('span');
+  if (label) label.textContent = 'Prüfe …';
+  if (btn) btn.disabled = true;
+  return api('/api/omlx/test', { method: 'POST', body: { url: $('#omlx-url').value, key: $('#omlx-key').value } })
+    .then((s) => { omlxStatus = s; })
+    .catch((e) => { omlxStatus = { ok: false, grund: 'server', meldung: `Test fehlgeschlagen: ${e.message}` }; })
+    .finally(() => {
+      if (label) label.textContent = 'Verbindung testen';
+      if (btn) btn.disabled = false;
+      zeigeOmlxStatus();
+    });
+}
+
+$('#btn-omlx-test').addEventListener('click', () => testOmlx());
+
+$('#omlx-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/api/omlx', { method: 'PUT', body: { url: $('#omlx-url').value, key: $('#omlx-key').value } });
+    toast('Einstellungen gespeichert.');
+    await ladeOmlx();
+    omlxStatus = null;
+    testOmlx(); // neue Werte sofort gegen OMLX prüfen
+    checkKi();
+  } catch (err) {
+    fehlerToast(err);
+  }
+});
 
 /* ------------------------------ Dokumente ------------------------------ */
 

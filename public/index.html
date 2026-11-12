@@ -39,6 +39,7 @@
     <symbol id="i-thema" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></symbol>
     <symbol id="i-leiste" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
     <symbol id="i-mehr" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></symbol>
+    <symbol id="i-zahn" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
   </svg>
 
   <a class="hlsw-sr-only" href="#main">Zum Inhalt springen</a>
@@ -67,6 +68,7 @@
         <span class="nav-gruppe g-werk">Werkzeuge</span>
         <a class="g-werk" href="#regeln" data-nav="regeln" title="Regeln"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-regel"/></svg></span><span class="nt">Regeln</span><span class="cnt" id="cnt-regeln"></span></a>
         <a class="g-werk" href="#scan" data-nav="scan" title="Scan"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-scan"/></svg></span><span class="nt">Scan</span></a>
+        <a class="g-werk" href="#einstellungen" data-nav="einstellungen" title="Einstellungen"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-zahn"/></svg></span><span class="nt">Einstellungen</span></a>
         <div class="nav-ki" id="nav-ki" data-ki="ok"><span class="status-dot" aria-hidden="true"></span><span id="nav-ki-text">KI-Status …</span></div>
         <button class="nav-schalter" id="btn-nav" type="button" aria-pressed="false" title="Navigation einklappen"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-leiste"/></svg></span><span class="nt">Einklappen</span></button>
       </nav>
@@ -104,7 +106,7 @@
               <div class="ki-row" id="ki-row" data-ki="ok"><span class="status-dot" aria-hidden="true"></span><span id="ki-row-text">KI-Status wird geprüft …</span></div>
               <dl class="felder ki-meta">
                 <dt>Modell</dt><dd>Qwen3.8-27B</dd>
-                <dt>Endpoint</dt><dd class="mono">omlx.lan.hammerlore.de:8443</dd>
+                <dt>Endpoint</dt><dd class="mono" id="ki-endpoint">—</dd>
                 <dt>Letzter Check</dt><dd id="ki-gecheckt">noch nicht</dd>
                 <dt>Durchsatz</dt><dd>ab P3</dd>
               </dl>
@@ -234,6 +236,51 @@
           </div>
         </section>
 
+        <!-- =========================== EINSTELLUNGEN ========================= -->
+        <section class="view-seite" id="view-einstellungen" aria-label="Einstellungen">
+          <div class="v-head">
+            <div>
+              <h1>Einstellungen</h1>
+              <p class="v-sub">KI-Verbindung (OMLX) hinterlegen und testen</p>
+            </div>
+          </div>
+
+          <div class="einst-grid">
+            <div class="hlsw-card">
+              <div class="card-h"><h2>KI-Verbindung (OMLX)</h2></div>
+              <div class="hlsw-alert" id="omlx-status" hidden>
+                <span class="hlsw-alert-dot" aria-hidden="true"></span>
+                <p id="omlx-status-text">Status wird geladen …</p>
+              </div>
+              <form id="omlx-form">
+                <div class="hlsw-field">
+                  <label for="omlx-url">OMLX-URL</label>
+                  <input id="omlx-url" name="url" type="url" inputmode="url" placeholder="https://omlx.lan.hammerlore.de:8443" autocomplete="off">
+                  <span class="hlsw-hint" id="omlx-url-hint">Adresse des OMLX-Backends — die KI-Antworten kommen von hier.</span>
+                </div>
+                <div class="hlsw-field">
+                  <label for="omlx-key">OMLX-Schlüssel (API-Key)</label>
+                  <input id="omlx-key" name="key" type="password" placeholder="omlx-…" autocomplete="off">
+                  <span class="hlsw-hint" id="omlx-key-hint">Leer lassen, um den gespeicherten Schlüssel beizubehalten.</span>
+                </div>
+                <div class="form-actions">
+                  <button class="hlsw-btn hlsw-btn--accent" type="submit"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Speichern</span></button>
+                  <button class="hlsw-btn hlsw-btn--ghost" type="button" id="btn-omlx-test"><svg class="i" aria-hidden="true"><use href="#i-ki"/></svg><span>Verbindung testen</span></button>
+                </div>
+              </form>
+            </div>
+
+            <div class="hlsw-card">
+              <div class="card-h"><h2>System</h2></div>
+              <dl class="felder">
+                <dt>App</dt><dd id="sys-version">—</dd>
+                <dt>Origin</dt><dd class="mono" id="sys-origin">—</dd>
+                <dt>Konfiguration</dt><dd id="sys-omlx-quelle">—</dd>
+              </dl>
+            </div>
+          </div>
+        </section>
+
         <!-- ============================ DOKUMENT ============================= -->
         <section class="view-seite" id="view-dokument" aria-label="Dokument">
           <a class="zurueck" href="#dokumente"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg>Zurück</a>
@@ -284,6 +331,7 @@
         <a href="#dokumente" data-nav="dokumente">Dokumente</a>
         <a href="#regeln" data-nav="regeln">Regeln</a>
         <a href="#scan" data-nav="scan">Scan</a>
+        <a href="#einstellungen" data-nav="einstellungen">Einstellungen</a>
       </div>
     </nav>
   </div>

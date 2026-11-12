@@ -9,7 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 
-export const SCHEMA_STAND = 2;
+export const SCHEMA_STAND = 3;
 
 const MIGRATIONEN = {
   1: `
@@ -57,6 +57,13 @@ const MIGRATIONEN = {
     CREATE INDEX IF NOT EXISTS idx_documents_sha ON documents(sha256);
     CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
     CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at);
+  `,
+   3: `
+    CREATE TABLE IF NOT EXISTS settings (
+      key         TEXT PRIMARY KEY,
+      value       TEXT NOT NULL,
+      updated_at  TEXT NOT NULL
+    );
   `,
 };
 
@@ -205,4 +212,22 @@ export function countDocuments(db, status = null) {
 
 export function deleteDocument(db, id) {
   return db.prepare('DELETE FROM documents WHERE id = ?').run(id).changes;
+}
+
+/* ------------------------------- Einstellungen -------------------------- */
+// Schlüssel/Werte für die App-Konfiguration (z. B. OMLX-URL, OMLX-Schlüssel).
+// Leerer Wert löscht den Eintrag — die .env-Werte gelten dann wieder.
+
+export function getSetting(db, key) {
+  return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;
+}
+
+export function setSetting(db, key, value) {
+  if (value === null || value === '') {
+    db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    return;
+  }
+  db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+    .run(key, value, new Date().toISOString());
 }
