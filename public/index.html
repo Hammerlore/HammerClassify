@@ -76,7 +76,7 @@
       <a class="nav-link" href="#" data-view="documents">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
         Dokumente
-        <span class="nav-count" data-count="documents">23</span>
+        <span class="nav-count" data-count="documents">0</span>
       </a>
       <a class="nav-link" href="#" data-view="rules">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M5 8l7-5 7 5M8 13l-3 8 5-3 5 3-3-8"/></svg>
@@ -100,7 +100,7 @@
         <div class="view-head">
           <div>
             <h1>Übersicht</h1>
-            <p class="view-sub">23 Dokumente · 6 Regeln aktiv · letzte Analyse heute 14:32</p>
+            <p class="view-sub">Dokumente · Regeln ab P3</p>
           </div>
           <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/></svg>
@@ -152,7 +152,7 @@
           <h2>Letzte Dokumente</h2>
           <table class="hlsw-table">
             <thead>
-              <tr><th scope="col">Dokument</th><th scope="col">Tags</th><th scope="col">Absender</th><th scope="col" class="hlsw-table--num">Betrag</th><th scope="col">Datum</th></tr>
+              <tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="hlsw-table--num">Größe</th><th scope="col">Status</th><th scope="col">Datum</th></tr>
             </thead>
             <tbody id="recent-tbody"></tbody>
           </table>
@@ -164,7 +164,7 @@
         <div class="view-head">
           <div>
             <h1>Dokumente</h1>
-            <p class="view-sub"><span data-stat="total">23</span> Dokumente · <span data-stat="rules">10</span> Regeln</p>
+            <p class="view-sub"><span data-stat="total">0</span> Dokumente · Regeln ab P3</p>
           </div>
           <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/></svg>
@@ -177,7 +177,7 @@
         <div class="hlsw-card">
           <table class="hlsw-table">
             <thead>
-              <tr><th scope="col">Dokument</th><th scope="col">Tags</th><th scope="col">Absender</th><th scope="col" class="hlsw-table--num">Betrag</th><th scope="col">Datum</th><th scope="col" class="hlsw-table--num">Konf.</th></tr>
+              <tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="hlsw-table--num">Größe</th><th scope="col">Status</th><th scope="col">Text</th><th scope="col">Datum</th></tr>
             </thead>
             <tbody id="docs-tbody"></tbody>
           </table>
@@ -189,7 +189,7 @@
         <div class="view-head">
           <div>
             <h1>Regeln</h1>
-            <p class="view-sub">Zentrale Definition der Klassifizierung · 9 Regeln · 3 Kategorien, 4 Typen, 2 Absender</p>
+            <p class="view-sub">Zentrale Definition der Klassifizierung · Regeln-UI ab P3</p>
           </div>
           <button class="hlsw-btn hlsw-btn--accent" id="btn-new-rule" type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -307,8 +307,9 @@
               <h3>Zugeordnete Tags</h3>
               <div class="tag-list" id="doc-tags"></div>
               <div class="doc-actions">
-                <button class="hlsw-btn hlsw-btn--accent" id="btn-reclassify" type="button">Neu klassifizieren</button>
+                <button class="hlsw-btn hlsw-btn--accent" id="btn-reclassify" type="button" disabled title="Klassifizierung ab P3 (Regeln + KI)">Neu klassifizieren</button>
                 <button class="hlsw-btn hlsw-btn--ghost" id="btn-export" type="button">Als .md exportieren</button>
+                <button class="hlsw-btn hlsw-btn--ghost" id="btn-download" type="button">Original laden</button>
               </div>
             </div>
             <div class="hlsw-card card">
@@ -331,11 +332,13 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
   </div>
-  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Dateien hierher ziehen oder klicken">
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Dateien hierher ziehen oder klicken zum Auswählen">
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/></svg>
-    <strong>Dateien hierher ziehen</strong>
-    <small>.docx und .pdf · max. 20 MB · max. 50 Dateien · Scans werden in den Ordner <em>Posteingang</em> gelegt</small>
+    <strong>Dateien hierher ziehen oder klicken</strong>
+    <small>.pdf, .docx, .zip · max. 25 MB pro Datei · Klick öffnet den Datei-Dialog</small>
   </div>
+  <input type="file" id="file-input" multiple accept=".pdf,.docx,.zip" hidden aria-hidden="true">
+  <div class="upload-files" id="upload-files" hidden></div>
   <div class="upload-progress" id="upload-progress">
     <div class="progress"><span id="upload-bar" style="width: 0%"></span></div>
     <p id="upload-status">Wird hochgeladen …</p>

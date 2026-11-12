@@ -1,6 +1,6 @@
-/* HammerClassify — Service Worker (P1: nur Caching der App-Shell) */
+/* HammerClassify — Service Worker (Caching der App-Shell) */
 'use strict';
-const CACHE = 'hammerclassify-v1';
+const CACHE = 'hammerclassify-v2';
 const SHELL = ['/', '/index.html', '/app.js', '/webauthn.js', '/app.css', '/hlsw-base.css', '/design-tokens.css', '/design-fonts.css', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

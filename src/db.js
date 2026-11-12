@@ -9,7 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 
-export const SCHEMA_STAND = 1;
+export const SCHEMA_STAND = 2;
 
 const MIGRATIONEN = {
   1: `
@@ -39,6 +39,24 @@ const MIGRATIONEN = {
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkeys(user_id);
+  `,
+  2: `
+    CREATE TABLE IF NOT EXISTS documents (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      name         TEXT NOT NULL,
+      ext          TEXT NOT NULL,
+      mime         TEXT NOT NULL,
+      size         INTEGER NOT NULL,
+      sha256       TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'imingang',
+      text         TEXT,
+      text_status  TEXT NOT NULL DEFAULT 'offen',
+      created_at   TEXT NOT NULL,
+      updated_at   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_documents_sha ON documents(sha256);
+    CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+    CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at);
   `,
 };
 
@@ -152,4 +170,39 @@ export function deleteSessionByToken(db, token) {
 export function deleteSessionsExceptPasskey(db, userId, keepPasskeyId) {
   return db.prepare('DELETE FROM sessions WHERE user_id = ? AND (passkey_id IS NULL OR passkey_id != ?)')
     .run(userId, keepPasskeyId).changes;
+}
+
+/* ------------------------------- Dokumente ----------------------------- */
+
+export function addDocument(db, { name, ext, mime, size, sha256, text, textStatus }) {
+  const jetzt = new Date().toISOString();
+  const id = db.prepare(`INSERT INTO documents
+    (name, ext, mime, size, sha256, status, text, text_status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'imingang', ?, ?, ?, ?)`)
+    .run(name, ext, mime, size, sha256, text, textStatus, jetzt, jetzt)
+    .lastInsertRowid;
+  return getDocument(db, id);
+}
+
+export function getDocument(db, id) {
+  return db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+}
+
+export function findDocumentBySha(db, sha256) {
+  return db.prepare('SELECT * FROM documents WHERE sha256 = ?').get(sha256);
+}
+
+export function listDocuments(db, { limit = 200 } = {}) {
+  return db.prepare('SELECT * FROM documents ORDER BY created_at DESC, id DESC LIMIT ?').all(limit);
+}
+
+export function countDocuments(db, status = null) {
+  if (status) {
+    return db.prepare('SELECT COUNT(*) AS n FROM documents WHERE status = ?').get(status).n;
+  }
+  return db.prepare('SELECT COUNT(*) AS n FROM documents').get().n;
+}
+
+export function deleteDocument(db, id) {
+  return db.prepare('DELETE FROM documents WHERE id = ?').run(id).changes;
 }

@@ -21,8 +21,11 @@
   "dependencies": {
     "@simplewebauthn/server": "^13.1.1",
     "better-sqlite3": "^12.2.0",
+    "busboy": "^1.6.0",
     "dotenv": "^17.2.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "jszip": "^3.10.2",
+    "pdfjs-dist": "^6.5.438"
   },
   "devDependencies": {
     "@levischuck/tiny-cbor": "^0.2.2",

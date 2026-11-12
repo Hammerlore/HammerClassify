@@ -25,6 +25,7 @@ export function loadEnv(overrides = {}) {
     setupToken: e.SETUP_TOKEN,
     sessionDays: Number(e.SESSION_DAYS ?? 30),
     dataDir: path.resolve(e.DATA_DIR ?? path.join(APP_ROOT, 'data')),
+    dokDir: path.resolve(e.DOK_DIR ?? path.join(e.DATA_DIR ?? path.join(APP_ROOT, 'data'), 'dokumente')),
     omlxUrl: e.OMLX_URL,
     omlxKey: e.OMLX_KEY,
     origin: e.ORIGIN, // z. B. https://classify.lan.hammerlore.de

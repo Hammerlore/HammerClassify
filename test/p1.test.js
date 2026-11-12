@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { encodeCBOR } from '@levischuck/tiny-cbor';
 
-import { openDb, createNutzer, addPasskey, createSession, getSessionByToken, deleteSessionByToken, deleteSessionsExceptPasskey } from '../src/db.js';
+import { openDb, createNutzer, addPasskey, createSession, getSessionByToken, deleteSessionByToken, deleteSessionsExceptPasskey, SCHEMA_STAND } from '../src/db.js';
 import * as auth from '../src/auth.js';
 import { createApp } from '../src/server.js';
 
@@ -135,7 +135,7 @@ after(() => {
 
 test('DB: Schema-Migration legt Tabellen an', () => {
   const v = db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v;
-  assert.equal(v, 1);
+  assert.equal(v, SCHEMA_STAND);
   for (const t of ['users', 'passkeys', 'sessions']) {
     assert.ok(db.prepare(`SELECT name FROM sqlite_master WHERE name = '${t}'`).get(), t);
   }

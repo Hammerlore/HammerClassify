@@ -1,15 +1,31 @@
 /* ==========================================================================
-   HammerClassify — Server (P1: Gerüst)
+   HammerClassify — Server (P1: Gerüst, P2: Upload + Text)
    Bind auf 127.0.0.1, erreichbar nur über Apache im Heimnetz (classify.lan.hammerlore.de).
    CSP: default-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'
    ========================================================================== */
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import Busboy from 'busboy';
 import { loadEnv, validateEnv, APP_ROOT } from './env.js';
-import { openDb, deleteSession, deleteSessionsExceptPasskey } from './db.js';
+import {
+  openDb, deleteSession, deleteSessionsExceptPasskey,
+  addDocument, getDocument, listDocuments, findDocumentBySha, deleteDocument,
+} from './db.js';
 import * as auth from './auth.js';
+import * as text from './text.js';
+
+/* ------------------------------ Upload --------------------------------- */
+const MAX_DATEI = 25 * 1024 * 1024; // konzept.md: Upload-Quoten 25 MB
+const MAX_TEXT = 2_000_000; // Obergrenze für den gespeicherten Volltext
+const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip']);
+const MIME = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  zip: 'application/zip',
+};
 
 export function createApp(config) {
   const app = express();
@@ -35,6 +51,14 @@ export function createApp(config) {
     }
     next();
   });
+
+  // Dokumenten-Endpunkte verlangen eine gültige Session
+  const requireSession = (req, res, next) => {
+    const s = auth.checkSession(config, req.cookies?.[auth.COOKIE_NAME] ?? cookieFromHeader(req));
+    if (!s.ok) return res.status(401).json({ fehler: 'Nicht angemeldet' });
+    req.session = s;
+    next();
+  };
 
   /* ------------------------------ API ---------------------------------- */
 
@@ -105,10 +129,158 @@ export function createApp(config) {
     res.json({ ok: true, abgemeldet: n });
   });
 
+  /* --------------------------- Dokumente (P2) --------------------------- */
+
+  // Listendarstellung: ohne Volltext, dafür kurze Vorschau (Suche/Preview)
+  const ohneText = (d) => {
+    const { text: _text, ...rest } = d;
+    return { ...rest, text_vorschau: d.text ? d.text.slice(0, 500) : null };
+  };
+
+  const idFromParams = (req) => {
+    const id = Number(req.params.id);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  };
+
+  // Upload: multipart (Feld „datei" + optional „text" für PDFs aus pdf.js)
+  app.post('/api/documents', requireSession, (req, res, next) => {
+    const bb = Busboy({
+      headers: req.headers,
+      limits: { fileSize: MAX_DATEI, fieldSize: 5 * 1024 * 1024, files: 1 },
+    });
+    let datei = null;
+    let limitTreff = false;
+    let textFeld;
+    bb.on('file', (name, stream, info) => {
+      if (name !== 'datei') {
+        stream.resume();
+        return;
+      }
+      const chunks = [];
+      stream.on('data', (c) => chunks.push(c));
+      stream.on('limit', () => { limitTreff = true; });
+      stream.on('end', () => {
+        datei = { buffer: Buffer.concat(chunks), filename: info.filename };
+      });
+      stream.on('error', next);
+    });
+    bb.on('field', (name, value) => {
+      if (name === 'text') textFeld = value;
+    });
+    bb.on('error', next);
+    bb.on('close', async () => {
+      try {
+        if (!datei) return res.status(400).json({ fehler: 'Keine Datei (Feld „datei")' });
+        if (limitTreff || datei.buffer.length > MAX_DATEI) {
+          return res.status(413).json({ fehler: 'Datei zu groß (max. 25 MB)' });
+        }
+        const name = sanitizeName(datei.filename);
+        const ext = (name.split('.').pop() || '').toLowerCase();
+        if (!ERLAUBTE_EXT.has(ext)) {
+          return res.status(400).json({ fehler: `Dateityp nicht erlaubt: .${ext} (nur .pdf, .docx, .zip)` });
+        }
+        // Deterministische Plausibilitätsprüfung, bevor etwas gespeichert wird
+        if (ext === 'pdf' && !/^%PDF/.test(datei.buffer.subarray(0, 1024).toString('latin1').trimStart())) {
+          return res.status(400).json({ fehler: 'Keine gültige PDF-Datei' });
+        }
+        if ((ext === 'docx' || ext === 'zip') && datei.buffer.subarray(0, 2).toString('latin1') !== 'PK') {
+          return res.status(400).json({ fehler: `Kein gültiges ${ext.toUpperCase()}-Archiv` });
+        }
+        const sha = crypto.createHash('sha256').update(datei.buffer).digest('hex');
+        const doppel = findDocumentBySha(config.db, sha);
+        if (doppel) {
+          return res.json({ ...ohneText(doppel), doppelung: true });
+        }
+        fs.mkdirSync(config.dokDir, { recursive: true });
+        fs.writeFileSync(path.join(config.dokDir, `${sha.slice(0, 16)}.${ext}`), datei.buffer, { mode: 0o600 });
+        let textInhalt = '';
+        try {
+          if (ext === 'docx') textInhalt = await text.extractDocxText(datei.buffer);
+          else if (ext === 'zip') textInhalt = await text.extractZipText(datei.buffer);
+          else if (ext === 'pdf') textInhalt = (textFeld ?? '').trim();
+        } catch {
+          textInhalt = ''; // defektes/unvollständiges Archiv → manuell
+        }
+        if (textInhalt.length > MAX_TEXT) textInhalt = textInhalt.slice(0, MAX_TEXT);
+        const textStatus = textInhalt ? 'ok' : 'kein_text';
+        const dok = addDocument(config.db, {
+          name, ext, mime: MIME[ext], size: datei.buffer.length, sha256: sha,
+          text: textInhalt || null, textStatus,
+        });
+        res.status(201).json({ ...ohneText(dok), text_zeichen: textInhalt.length });
+      } catch (e) {
+        next(e);
+      }
+    });
+    req.pipe(bb);
+  });
+
+  app.get('/api/documents', requireSession, (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 200, 500);
+    res.json({ dokumente: listDocuments(config.db, { limit }).map(ohneText) });
+  });
+
+  app.get('/api/documents/:id', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    const dok = id && getDocument(config.db, id);
+    if (!dok) return res.status(404).json({ fehler: 'Dokument nicht gefunden' });
+    res.json(dok); // mit Volltext
+  });
+
+  // Download: immer als Attachment, nie gerendert (konzept.md §Security-First 4)
+  app.get('/api/documents/:id/download', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    const dok = id && getDocument(config.db, id);
+    if (!dok) return res.status(404).json({ fehler: 'Dokument nicht gefunden' });
+    const pfad = path.join(config.dokDir, `${dok.sha256.slice(0, 16)}.${dok.ext}`);
+    if (!fs.existsSync(pfad)) return res.status(404).json({ fehler: 'Datei fehlt auf dem Server' });
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${dok.name.replace(/"/g, '')}"`);
+    fs.createReadStream(pfad).pipe(res);
+  });
+
+  app.delete('/api/documents/:id', requireSession, async (req, res, next) => {
+    try {
+      const id = idFromParams(req);
+      const dok = id && getDocument(config.db, id);
+      if (!dok) return res.status(404).json({ fehler: 'Dokument nicht gefunden' });
+      deleteDocument(config.db, dok.id);
+      // fs.promises.rm: fs.rm() ohne Callback crasht den Prozess (Node-Interner
+      // rimraf ruft den undefined-Callback auf) — hier deterministisch warten.
+      await fs.promises.rm(
+        path.join(config.dokDir, `${dok.sha256.slice(0, 16)}.${dok.ext}`),
+        { force: true },
+      ).catch(() => {}); // Datei fehlt → egal
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  /* ------------------------------ KI-Status ----------------------------- */
+  // OMLX-Ping: Timeout-Strategie aus konzept.md (definiert „KI nicht erreichbar")
+
+  app.get('/api/ki/status', requireSession, async (req, res) => {
+    if (!config.omlxUrl) return res.json({ ok: false, grund: 'OMLX nicht konfiguriert' });
+    const t0 = Date.now();
+    try {
+      const r = await fetch(`${config.omlxUrl}/v1/models`, {
+        headers: { authorization: `Bearer ${config.omlxKey ?? ''}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      res.json({ ok: r.ok, ms: Date.now() - t0, grund: r.ok ? undefined : `HTTP ${r.status}` });
+    } catch (e) {
+      res.json({ ok: false, ms: Date.now() - t0, grund: e.name === 'TimeoutError' ? 'Timeout' : e.message });
+    }
+  });
+
   /* --------------------------- Statische Seite -------------------------- */
 
   const pub = path.join(APP_ROOT, 'public');
   app.use(express.static(pub, { index: 'index.html' }));
+
+  // pdf.js für die Browser-Textextraktion (konzept.md: lokal ausgeliefert)
+  app.use('/vendor/pdfjs', express.static(path.join(APP_ROOT, 'node_modules/pdfjs-dist/build')));
 
   // JSON-Fehler statt Express-Standard-HTML
   app.use((err, req, res, next) => {
@@ -118,6 +290,14 @@ export function createApp(config) {
   });
 
   return app;
+}
+
+// Dateiname bereinigen: nur Basisname (kein Pfad), sichere Zeichen, Länge begrenzt.
+// Das Display-Name — die Datei auf Platte heißt immer <sha256-16>.<ext>.
+function sanitizeName(name) {
+  const basis = (name || 'datei').replace(/\\/g, '/').split('/').pop()
+    .replace(/[^\w.\- äöüßÄÖÜ]/g, '_').trim();
+  return (basis || 'datei').slice(0, 150);
 }
 
 // Cookie-Auswertung ohne cookie-Paket
@@ -148,6 +328,7 @@ if (direkt || process.env.PM2_HOME) {
   }
   const fs_ = fs;
   fs_.mkdirSync(config.dataDir, { recursive: true });
+  fs_.mkdirSync(config.dokDir, { recursive: true });
   config.db = openDb(config.dataDir);
   const app = createApp(config);
   app.listen(config.port, config.host, () => {
