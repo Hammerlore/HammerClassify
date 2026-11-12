@@ -191,6 +191,7 @@ dialog::backdrop { background: color-mix(in srgb, var(--hero) 55%, transparent);
 .v-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-4); }
 .v-head h1 { font: var(--type-h2); letter-spacing: -0.014em; margin: 0; }
 .v-head p, .v-sub { color: var(--text-muted); font-size: 14.5px; margin: 2px 0 0; max-width: 70ch; }
+.v-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* Ab der Seitenleiste bleibt der Seitenkopf oben stehen. --seitenkopf-h: ungefähre Höhe, für alles, was darunter klebt. */
 @container (min-width: 1100px) {
   .rahmen { --seitenkopf-h: 84px; }

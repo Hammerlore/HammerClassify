@@ -10,7 +10,8 @@ kein Internet), Single-User, Security-First.
 (Finder-Dialog + Drag&Drop, 25 MB, Magic-Bytes; .pdf/.docx/.zip/.txt/.md),
 SHA-256-Dedup, Volltext (docx/zip per jszip, PDF per pdf.js im Browser,
 TXT/MD als Klartext direkt), Dokumente-Liste/Detail/Download,
-Regeln (Kategorien + Dokumenttypen als Daten in der DB, CRUD in der App),
+Regeln (Kategorien + Dokumenttypen als Daten in der DB, CRUD in der App,
+JSON-Import/Export),
 Klassifizierung per KI (OMLX/Qwen3.8-27B) mit strikter Schema-Prüfung
 (unbekannte Felder raus, Tags nur aus dem Regel-Set, Zitate müssen im Volltext
 vorkommen), Bestätigung/Ablehnung, Inhaber-Profil, Einstellungen (OMLX + Inhaber).

@@ -558,6 +558,8 @@ test('Server: P3-Endpunkte ohne Session → 401', async () => {
     ['POST', `${base}/api/rules`],
     ['PUT', `${base}/api/rules/1`],
     ['DELETE', `${base}/api/rules/1`],
+    ['GET', `${base}/api/rules/export`],
+    ['POST', `${base}/api/rules/import`],
     ['GET', `${base}/api/inhaber`],
     ['PUT', `${base}/api/inhaber`],
     ['POST', `${base}/api/documents/1/klassifizieren`],
@@ -660,6 +662,52 @@ test('Server: DELETE /api/rules/:id — einmal 200, erneut 404', async () => {
   assert.equal(r1.status, 200);
   const r2 = await fetch(`${base}/api/rules/${temp.id}`, { method: 'DELETE', headers: headers() });
   assert.equal(r2.status, 404);
+});
+
+test('Server: POST /api/rules/import — neu, aktualisieren, ungültig verwerfen', async () => {
+  const r = await fetch(`${base}/api/rules/import`, {
+    method: 'POST',
+    headers: { ...headers(), ...json },
+    body: JSON.stringify({
+      regeln: [
+        { name: 'Strom', art: 'kategorie', beschreibung: 'Importiert: alles zu Strom', schluesselwoerter: ['strom'] }, // existiert → aktualisieren
+        { name: 'Gas', art: 'kategorie', beschreibung: 'Alles zu Gas' }, // neu
+        { name: 'Angebot', art: 'dokumenttyp', beschreibung: 'Preisvorschlag ohne Verpflichtung' }, // neu
+        { art: 'kategorie', beschreibung: 'x' }, // kein Name → verwerfen
+        { name: 'Quatsch', art: 'falsch', beschreibung: 'x' }, // falsche Art → verwerfen
+      ],
+    }),
+  });
+  assert.equal(r.status, 200);
+  const b = await r.json();
+  assert.equal(b.importiert, 2);
+  assert.equal(b.aktualisiert, 1);
+  assert.equal(b.verworfen.length, 2);
+  assert.match(b.verworfen[0].name, /ohne Namen/);
+  assert.match(b.verworfen[1].fehler, /art/);
+
+  const liste = await (await fetch(`${base}/api/rules`, { headers: headers() })).json();
+  assert.equal(liste.regeln.length, 6); // Strom, Wasser, Rechnung, Eigenes + Gas, Angebot
+  assert.equal(liste.regeln.find((x) => x.name === 'Strom').beschreibung, 'Importiert: alles zu Strom');
+});
+
+test('Server: POST /api/rules/import — ungültiger Körper → 400', async () => {
+  for (const body of [{}, { regeln: [] }, { regeln: 'keine liste' }]) {
+    const r = await fetch(`${base}/api/rules/import`, { method: 'POST', headers: { ...headers(), ...json }, body: JSON.stringify(body) });
+    assert.equal(r.status, 400, JSON.stringify(body));
+  }
+});
+
+test('Server: GET /api/rules/export — JSON-Datei mit allen Regeln', async () => {
+  const r = await fetch(`${base}/api/rules/export`, { headers: headers() });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /application\/json/);
+  assert.match(r.headers.get('content-disposition'), /attachment/);
+  const b = await r.json();
+  assert.equal(b.app, 'hammerclassify');
+  assert.equal(b.art, 'regeln');
+  assert.equal(b.regeln.length, 6);
+  assert.ok(b.exportiert);
 });
 
 test('Server: Inhaber-Profil — leer, speichern, lesen, leeren, neu', async () => {

@@ -182,7 +182,7 @@ das, was die Dokumentenverarbeitung verlangt:
 | **Übersicht** | Zähler (eingang, einzukategorisieren, mit Beleg), Verteilung der Kategorien (kategorische HLSW-Skala), jüngste 10 Dokumente, KI-Status |
 | **Dokumente** | Tabelle: Name, Typ, Kategorien, Absender, Datum, Betrag, Status, Konfidenz. Filter nach Tag/Status, Suche nach Absender/Text, Sortierung. |
 | **Dokument (Detail)** | Seitenansicht: Tags mit Konfidenz-Badges, Absender/Datum/Betrag, `kern`-Zusammenfassung, Belegwesen, dann der Volltext; Buttons „Bestätigen" (Akzent), „Ablehnen", „Nachbearbeiten" |
-| **Regeln** | Liste beider Tag-Arten, Formular (Neu/ändern: Name, Art, Beschreibung, Schlüsselwörter, Bedingungen, Beispiel), „Regel-Set als JSON" (Download), Spalte „Treffs in den letzten 90 Tagen" |
+| **Regeln** | Liste beider Tag-Arten, Formular (Neu/ändern: Name, Art, Beschreibung, Schlüsselwörter, Bedingungen, Beispiel), „Regel-Set als JSON" (Export-Download; Import: Upsert pro Art+Name, ungültige Einträge werden mit Grund verworfen), Spalte „Treffs in den letzten 90 Tagen" |
 | **Scan** | Pfad (gepflegte Verzeichnisse), Datei-Liste, Queue mit Fortschritt, „Alles ausführen" |
 
 Vorbild-Layout, beidseitig 320/2080px: Kopfleiste (Logo, Suchfeld,

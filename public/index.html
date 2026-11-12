@@ -151,7 +151,12 @@
               <h1>Regeln</h1>
               <p class="v-sub" id="rules-sub">Beispiel-Regeln — die echte Regeln-UI kommt mit P3</p>
             </div>
-            <button class="hlsw-btn hlsw-btn--accent" id="btn-new-rule" type="button"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span>Neue Regel</span></button>
+            <div class="v-actions">
+              <button class="hlsw-btn hlsw-btn--ghost" id="btn-rules-export" type="button"><span>Export</span></button>
+              <button class="hlsw-btn hlsw-btn--ghost" id="btn-rules-import" type="button"><span>Import</span></button>
+              <button class="hlsw-btn hlsw-btn--accent" id="btn-new-rule" type="button"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span>Neue Regel</span></button>
+            </div>
+            <input type="file" id="rules-import-file" accept="application/json,.json" hidden aria-hidden="true">
           </div>
 
           <div class="regeln-grid">

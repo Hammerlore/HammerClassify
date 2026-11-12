@@ -388,6 +388,45 @@ export function createApp(config) {
     res.json({ ok: true });
   });
 
+  // Export: das Regel-Set als JSON-Datei. Als Attachment vom Server, nicht als
+  // blob: im Browser — die CSP erlaubt blob: nur in img-src.
+  app.get('/api/rules/export', requireSession, (req, res) => {
+    const alle = listRegeln(config.db);
+    const payload = { app: 'hammerclassify', art: 'regeln', version: 1, exportiert: new Date().toISOString(), regeln: alle };
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="hammerclassify-regeln-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.send(JSON.stringify(payload, null, 2));
+  });
+
+  // Import: Upsert pro (art, name) — Start-Set oder Backup in einem Rutsch.
+  // Ungültige Einträge werden mit Grund verworfen, nie schlägt der ganze Import fehl.
+  app.post('/api/rules/import', requireSession, (req, res) => {
+    const liste = Array.isArray(req.body?.regeln) ? req.body.regeln : null;
+    if (!liste || !liste.length) return res.status(400).json({ fehler: '„regeln“: nicht leere Liste erwartet' });
+    if (liste.length > 200) return res.status(400).json({ fehler: 'Maximal 200 Regeln pro Import' });
+    const aktuell = listRegeln(config.db);
+    let importiert = 0;
+    let aktualisiert = 0;
+    const verworfen = [];
+    for (const roh of liste) {
+      const { fehler, werte } = regelFelder(roh);
+      if (fehler.length) {
+        const name = typeof roh?.name === 'string' && roh.name.trim() ? roh.name.trim().slice(0, 100) : '(ohne Namen)';
+        verworfen.push({ name, fehler: fehler.join('; ') });
+        continue;
+      }
+      const idx = aktuell.findIndex((r) => r.art === werte.art && r.name.toLowerCase() === werte.name.toLowerCase());
+      if (idx >= 0) {
+        aktuell[idx] = updateRegel(config.db, aktuell[idx].id, werte);
+        aktualisiert++;
+      } else {
+        aktuell.push(addRegel(config.db, werte));
+        importiert++;
+      }
+    }
+    res.json({ importiert, aktualisiert, verworfen });
+  });
+
   /* --------------------------- Inhaber-Profil (P3) ------------------------ */
   // Dient der Bedingung `eigener_name_adresse` (deterministisch geprüft) und
   // erscheint im Prompt verallgemeinert. Nie im Repo: DB auf dem hammerpi.

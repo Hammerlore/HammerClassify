@@ -900,6 +900,31 @@ async function loescheRegel(rule) {
 $('#btn-new-rule').addEventListener('click', () => openRuleForm(null));
 $('#btn-rule-cancel').addEventListener('click', () => { $('#regel-form-card').hidden = true; });
 
+// Export/Import: das Regel-Set als JSON — Backup oder Start-Set in einem Rutsch.
+// Export lädt das Attachment direkt vom Server (CSP: blob: nur in img-src).
+$('#btn-rules-export').addEventListener('click', () => {
+  window.location.href = '/api/rules/export';
+});
+
+$('#btn-rules-import').addEventListener('click', () => $('#rules-import-file').click());
+
+$('#rules-import-file').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const roh = JSON.parse(await file.text());
+    const liste = Array.isArray(roh) ? roh : roh?.regeln;
+    if (!Array.isArray(liste) || !liste.length) throw new Error('Keine Regeln in der Datei gefunden');
+    const r = await api('/api/rules/import', { method: 'POST', body: { regeln: liste } });
+    const zusatz = r.verworfen.length ? `, ${r.verworfen.length} verworfen` : '';
+    toast(`Import: ${r.importiert} neu, ${r.aktualisiert} aktualisiert${zusatz}.`);
+    await ladeRegeln();
+  } catch (err) {
+    fehlerToast(err);
+  }
+});
+
 $('#regel-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
