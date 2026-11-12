@@ -416,6 +416,17 @@ test('ergebnis: Top-Level-Array ohne Namensfelder → struktureller Fehler', () 
   assert.match(r.fehler[0], /JSON-Array/);
 });
 
+test('ergebnis: Ergebnis-Objekt in Ein-Element-Array verpackt → aufwickeln', () => {
+  // Zweite Variante der Feldbeobachtung: das Modell gibt das komplette
+  // Objekt aus, verpackt in ein Array.
+  const { ok, ergebnis, verworfen, fehler } = pruefeErgebnis([GUELTIG], { regeln: REGELN, volltext: VOLLTEXT, inhaber: INHABER });
+  assert.equal(ok, true);
+  assert.deepEqual(fehler, []);
+  assert.equal(ergebnis.dokumenttyp.name, 'Rechnung');
+  assert.deepEqual(ergebnis.kategorien.map((k) => k.name), ['Strom', 'Eigenes']);
+  assert.ok(verworfen.some((v) => v.includes('in ein Array verpackt')));
+});
+
 test('ergebnis: Bedingung eigener_name_adresse — Inhaber im Text → bleibt', () => {
   const { ergebnis, verworfen } = bedingungenPruefen(
     { dokumenttyp: { name: 'Rechnung', konfidenz: 1 }, kategorien: [{ name: 'Eigenes', konfidenz: 0.8, stellen: ['x'] }] },
@@ -861,6 +872,17 @@ test('Server: KI-Antwort nur Kategori-Liste → Rettung, 200 mit Hinweis', async
   // Der Hinweis bleibt auch im gespeicherten Vorschlag (erscheint im Detail)
   const gespeichert = JSON.parse(getDocument(db, dok1Id).klassifizierung);
   assert.ok(gespeichert.verworfen.some((v) => v.includes('nur eine Liste')));
+});
+
+test('Server: KI-Antwort als Ein-Element-Array (komplettes Objekt) → 200', async () => {
+  // Die im Feld beobachtete Variante: komplettes Ergebnis-Objekt,
+  // in ein Array verpackt.
+  fakeOmlx.state.inhalt = JSON.stringify([GUELTIG]);
+  const r = await fetch(`${base}/api/documents/${dok1Id}/klassifizieren`, { method: 'POST', headers: headers() });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.dokument.klassifizierung.dokumenttyp.name, 'Rechnung');
+  assert.ok(body.verworfen.some((v) => v.includes('in ein Array verpackt')));
 });
 
 test('Server: KI-Ergebnis gültig → 200, Vorschlag gespeichert', async () => {

@@ -106,17 +106,26 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
   if (!raw || typeof raw !== 'object') {
     return { ok: false, ergebnis: null, verworfen: [], fehler: ['Ergebnis ist kein JSON-Objekt'] };
   }
-  // Kleine Modelle geben gelegentlich nur die Kategori-Liste statt des Objekts
-  // aus (beobachtet mit Qwen3.8-27B-4bit bei englischen Rechnungen). Rettung:
-  // die Liste als „kategorien" übernehmen — jeder Eintrag wird weiterhin
-  // strikt geprüft (Name aus dem Regel-Set, Zitate müssen im Volltext sein).
-  const listRettung = Array.isArray(raw)
-    && raw.length > 0
-    && raw.every((x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.name === 'string');
-  if (Array.isArray(raw) && !listRettung) {
-    return { ok: false, ergebnis: null, verworfen: [], fehler: ['Ergebnis ist ein JSON-Array, aber keine Kategori-Liste'] };
+  // Kleine Modelle verpacken das Ergebnis gelegentlich in ein Top-Level-Array
+  // statt es direkt auszugeben (beobachtet mit Qwen3.8-27B-4bit bei englischen
+  // Rechnungen), in zwei Varianten:
+  //  - ein einzelnes Ergebnis-Objekt (mind. ein bekanntes Feld) → aufwickeln
+  //  - eine Liste von Kategorie-Einträgen (mit „name") → als „kategorien"
+  //    übernehmen. Jeder Eintrag wird in beiden Fällen weiterhin strikt
+  //    geprüft (Name aus dem Regel-Set, Zitate müssen im Volltext sein).
+  let arrayRettung = null;
+  if (Array.isArray(raw)) {
+    const istErgebnisObjekt = (x) => x && typeof x === 'object' && !Array.isArray(x) && FELDER.some((f) => f in x);
+    if (raw.length === 1 && istErgebnisObjekt(raw[0])) {
+      arrayRettung = 'objekt';
+      raw = raw[0];
+    } else if (raw.length > 0 && raw.every((x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.name === 'string')) {
+      arrayRettung = 'kategorien';
+      raw = { kategorien: raw };
+    } else {
+      return { ok: false, ergebnis: null, verworfen: [], fehler: ['Ergebnis ist ein JSON-Array, aber weder ein Ergebnis-Objekt noch eine Kategori-Liste'] };
+    }
   }
-  if (listRettung) raw = { kategorien: raw };
 
   const fehler = [];
   const verworfen = [];
@@ -247,9 +256,11 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
   const { ergebnis: geprueft, verworfen: bedingungsGründe } = bedingungenPruefen(ergebnis, { regeln, inhaber, volltext });
   verworfen.push(...bedingungsGründe);
 
-  if (listRettung) {
+  if (arrayRettung === 'kategorien') {
     // Transparenz: der Vorschlag ist unvollständig — das soll der Nutzer sehen.
     verworfen.push('KI-Antwort war nur eine Liste — als Kategorien übernommen; übrige Felder (Dokumenttyp, Absender, Datum, Beträge) fehlen.');
+  } else if (arrayRettung === 'objekt') {
+    verworfen.push('KI-Antwort war in ein Array verpackt — das Ergebnis-Objekt wurde übernommen.');
   }
 
   const ok = Object.keys(geprueft).some((f) => f !== 'schema' && geprueft[f] != null);
