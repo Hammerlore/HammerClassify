@@ -27,7 +27,7 @@ export function loadEnv(overrides = {}) {
     dataDir: path.resolve(e.DATA_DIR ?? path.join(APP_ROOT, 'data')),
     omlxUrl: e.OMLX_URL,
     omlxKey: e.OMLX_KEY,
-    origin: e.ORIGIN, // z. B. https://hamclassify.hammerlore.de
+    origin: e.ORIGIN, // z. B. https://classify.lan.hammerlore.de
   };
   return config;
 }
@@ -38,7 +38,7 @@ export function loadEnv(overrides = {}) {
  */
 export function validateEnv(config) {
   const fehler = [];
-  if (!config.rpId) fehler.push('RP_ID fehlt (WebAuthn-Relying-Party, z. B. hamclassify.hammerlore.de)');
+  if (!config.rpId) fehler.push('RP_ID fehlt (WebAuthn-Relying-Party, z. B. classify.lan.hammerlore.de)');
   if (!config.setupToken) {
     // Nur beim allerersten Start erlaubt: dann legt setup.js sie an.
     fehler.push('SETUP_TOKEN fehlt (≥ 20 Zeichen, nur für Erststart/Notfall)');

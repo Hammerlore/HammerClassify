@@ -1,7 +1,8 @@
 # HammerClassify
 
-KI-gestützte Dokumenten-Klassifizierung (Word/PDF) auf dem hammerpi — intern erreichbar,
-Single-User, Security-First.
+KI-gestützte Dokumenten-Klassifizierung (Word/PDF) auf dem hammerpi —
+`https://classify.lan.hammerlore.de`, **nur im Heimnetz** (Apache + Pi-hole,
+kein Internet), Single-User, Security-First.
 
 ## Status
 

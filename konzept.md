@@ -1,6 +1,6 @@
 # HammerClassify — Konzept
 
-Stand: 10.10.2026 · Status: Konzept (unabgesegnet) · Repo: `Hammerlore/HammerClassify`
+Stand: 12.11.2026 · Status: P1 abgeschlossen (11.11.2026) · Repo: `Hammerlore/HammerClassify`
 
 ## Was die App ist
 
@@ -127,11 +127,12 @@ das, was die Dokumentenverarbeitung verlangt:
    required`, `SETUP_TOKEN` (≥ 20 Zeichen) nur für Erststart und Notfall.
    **Kein Passwort, kein E-Mail-Reset.** (Entscheidung aus Management, unverändert.)
 2. **Sitzung.** httpOnly `sid`-Cookie, `SameSite=Strict`, `Secure` (HTTPS via
-   Tunnel), 30 Tage, Hash in der DB. Schreibende Anfragen nur von eigener
-   Origin (CSRF) — identisch zu Management.
-3. **Netz.** Bind auf `127.0.0.1:301x`, erreichbar nur über den Cloudflare-Tunnel
-   (Reverse-Proxy; `ui.hammerlore.de`/`hammerlore.de`-Landschaft, wie
-   `hlsw.hammerlore.de`). CSP: `default-src 'self'; img-src 'self' data: blob:;
+   Apache im Heimnetz), 30 Tage, Hash in der DB. Schreibende Anfragen nur von
+   eigener Origin (CSRF) — identisch zu Management.
+3. **Netz.** Bind auf `127.0.0.1:3018`, erreichbar nur über Apache im Heimnetz
+   (`classify.lan.hammerlore.de` mit `Require ip 192.168.0.0/16`, Name über
+   Pi-hole — Muster MoneyMe, **kein Cloudflare-Tunnel, kein Internet**).
+   CSP: `default-src 'self'; img-src 'self' data: blob:;
    frame-ancestors 'none'`, HSTS. Upload-Quoten 25 MB, Types nur PDF/DOCX/ZIP
    (ZIP: erzeugt beim Office-Exporten, wird entpackt, alle Folien geprüft).
 4. **Datei-Grundsatz: eingereicht = fremd.** Der Inhalt eines Dokuments ist
@@ -188,17 +189,19 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 
 - App: `/mnt/nvme/hammerclassify` (`.git`-frei, `keys/`-Ablage), `.env` 600
 - Prozess: pm2 `hammerclassify`, Fork, Node ≥ 20, Port **3018** (3014/3017 belegt: Tennisrunde, rex — geprüft 11.11.2026)
-- Tunnel: `hamclassify.hammerlore.de` (Vorschlag) im Tunnel `nextcloud`
-- DNS: Cloudflare, CNAME via `cloudflared tunnel route dns`
+- Adresse: `https://classify.lan.hammerlore.de` — **nur Heimnetz, kein Internet**
+  (entschieden 12.11.2026): Apache-Vhost mit `Require ip 192.168.0.0/16`
+  (Muster MoneyMe), Zertifikat certbot (DNS-Challenge Cloudflare), Name als
+  lokaler Eintrag in Pi-hole — kein Cloudflare-Tunnel
 - Sicherung: `backup-all.sh` aufnehmen (DB + `data/dokumente/`)
 - Befehl: `./tools/aufspielen.sh` → `npm run check` → kopieren → `npm i` →
-  pm2 → lokale 200-Prüfung → Tunnel-Validierung → CNAME
+  pm2 → lokale 200-Prüfung → Apache-Validierung
 
 ## Bauplan (Phasen)
 
 | Phase | Umfang | Abnahmekriterium |
 |---|---|---|
-| **P1: Gerüst** | Repo aus `hlsw-pwa-template` + Management-Server (Passkey, Session, CSP, DB, `data/`, pm2, Tunnel, Backup) | Anmelden per Passkey auf `hamclassify.hammerlore.de` möglich |
+| **P1: Gerüst** | Repo aus `hlsw-pwa-template` + Management-Server (Passkey, Session, CSP, DB, `data/`, pm2, Apache, Backup) | Anmelden per Passkey auf `classify.lan.hammerlore.de` möglich |
 | **P2: Upload + Text** | Upload PDF/DOCX, Textgewinnung (jszip / pdf.js), Eintrag imingang, Vorschau, Deduplication | 3 echte Dokumente hochladen, Volltext readable |
 | **P3: Regeln + KI** | Regeln-UI, Prompt-Renderer, OMLX-Client, Schema-Prüfung, Bestätigung/ablehnen, „Neu einordnen" | 20 echte Dokumente ≥ 80 % treffend (manuell abgeglichen), 0 unbekannte Tags |
 | **P4: Scan + CSV** | Verzeichnis-Scan, Queue, CSV-Export, Darstellung | Verzeichnis mit 50 Dateien vollständig durchlaufen |
@@ -224,7 +227,9 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
    liegt noch und lässt nur `192.168.180.84` durch — die Vault-Notiz oMLX
    („entfernt 19.10.") ist veraltet. Offen bleibt: Der Studio schläft nach 1 min,
    oMLX ist dann nicht erreichbar — der Zustand „KI nicht erreichbar" deckt das ab.
-2. **Domain:** `hamclassify.hammerlore.de` OK? (oder `classify.` / `dokumente.`)
+2. **Domain: entschieden (12.11.2026).** `classify.lan.hammerlore.de` — wie
+   MoneyMe (`moneyme.lan.`) nur im Heimnetz: Apache + Pi-hole, kein
+   Cloudflare-Tunnel, aus dem Internet nicht erreichbar.
 3. **Scan-Verzeichnisse:** welche Pfade auf dem hammerpi sind die
    Quell-Verzeichnisse? (z. B. `~/Dokumente/Posteingang`, Nextcloud-Sync-Ordner?)
    Die App liest nur Pfade, die in der DB gepflegt sind, nie freie Pfade.
@@ -243,8 +248,7 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
   Server das gewollte Modell.
 - **Zugangsdaten nur auf dem hammerpi** (`.env`, 600): gilt 1:1; OMLX-
   Schlüssel, `SETUP_TOKEN`, `RP_ID` sind Hammerpi-only.
-- **Node 20 auf dem hammerpi:** Management läuft mit Node 20 (Vault-Notiz
-  vom 09.10), die Vorlage verlangt ≥ 20.15 — bitte Node-Version auf dem
-  hammerpi prüfen, vor der P1-Annahme.
+- **Node auf dem hammerpi:** geprüft 11.11.2026: läuft mit **v24.22.2** (nicht
+  mehr 20) — erfüllt die Vorlage (≥ 20.15).
 - **Porte:** 3000–3003, 3005, 3009–3013, 3333/3334, 3444, 5433–5438, 8081,
   8720, 9119 belegt; **3018** ist der nächste freie im 30xx-Block (geprüft 11.11.2026: 3000–3005, 3008–3017, 3020 belegt).
