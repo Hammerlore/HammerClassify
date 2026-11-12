@@ -133,9 +133,12 @@ function cookieFromHeader(req) {
 
 /* ------------------------------ Start ---------------------------------- */
 
-// Nur starten, wenn direkt aufgerufen (npm start / pm2) — nicht bei Import in Tests.
+// Nur starten, wenn direkt aufgerufen (npm start) oder unter pm2 — nicht bei Import in Tests.
 // argv[1] ist relativ („src/server.js“): gegen CWD auflösen, sonst passt der Vergleich nie.
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+// Unter pm2 (fork) lädt der Agent das Skript per import() — argv[1] zeigt dann auf den
+// pm2-Agenten, darum PM2_HOME als zweiter Marker.
+const direkt = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (direkt || process.env.PM2_HOME) {
   const config = loadEnv();
   const { ok, fehler } = validateEnv(config);
   if (!ok) {
