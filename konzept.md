@@ -209,11 +209,33 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 | **P1: Gerüst** | Repo aus `hlsw-pwa-template` + Management-Server (Passkey, Session, CSP, DB, `data/`, pm2, Apache, Backup) | Anmelden per Passkey auf `classify.lan.hammerlore.de` möglich |
 | **P2: Upload + Text** | Upload PDF/DOCX, Textgewinnung (jszip / pdf.js), Eintrag eingang, Vorschau, Deduplication | 3 echte Dokumente hochladen, Volltext readable |
 | **P3: Regeln + KI** | Regeln-UI, Prompt-Renderer, OMLX-Client, Schema-Prüfung, Bestätigung/ablehnen, „Neu einordnen" | 20 echte Dokumente ≥ 80 % treffend (manuell abgeglichen), 0 unbekannte Tags |
-| **P4: Scan + CSV** | Verzeichnis-Scan, Queue, CSV-Export, Darstellung | Verzeichnis mit 50 Dateien vollständig durchlaufen |
+| **P4: Scan + CSV** | Verzeichnis-Scan (Quellen: lokale Pfade auf dem Pi, OneDrive per rclone, Nextcloud-Datenverzeichnis — siehe Integration), Queue, CSV-Export, Darstellung; classify hält die Metadaten, die Dateien bleiben am Ursprungsort | Verzeichnis mit 50 Dateien vollständig durchlaufen |
+| **P5: Dokumenten-Karte** (später) | Visueller Graph/Treemap aus Kategorien + Regeln: wo welche Dokumente liegen, filterbar nach Kategorie/Typ/Quelle — reine Metadaten-Ansicht, Dateien rühren nicht an | Karte zeigt den gescannten Korpus, Filter nach Kategorie, Typ und Quelle |
+| **P6: Restrukturierung** (noch später) | Benennung + Umstrukturierung von Dokumenten an einem neuen Ort (z. B. Nextcloud) auf Basis der classify-Metadaten, mit Log | Ein gewählter Ordner wird regelkonform umbenannt/umsortiert, jede Aktion protokolliert |
 
 **V2 (nicht verbindlich):** OCR für Scans, Sync nach `HLSW-Management`
 (Beleg übernehmen → Ausgabe), Aufbewahrung mit Halte-Tag, zweite OMLX-Instanz
 (`hermes-3-3b`) für die grobe Vorselektion vor dem 27B-Modell.
+
+### Integration: Nextcloud + OneDrive (P4, geprüft 12.11.2026)
+
+- **Nextcloud** (Docker auf demselben Pi, `cloud.lan.hammerlore.de`, Daten unter
+  `/mnt/nvme/nextcloud/data`): classify läuft als `ncadmin` und hat eine
+  Lese-ACL auf das Datenverzeichnis — Lesen geht direkt per Dateisystem, kein
+  WebDAV nötig. Für spätere Schreibzugriffe (P6) App-Password + WebDAV oder
+  schreibende ACL.
+- **OneDrive (Personal):** rclone-Remote `onedrive:` liegt auf dem Pi
+  (bereits authentifiziert, für Backups genutzt) — classify listet/liest per
+  rclone, ohne Sync. Dokument-Ordner: `16 Bank` (207), `80 Wohnung` (258),
+  `81 Haus` (714), `90 Auto` (270), `92 IT` (263), `97 Misc` (457);
+  `15 Dokumente` (7.175) und `20 Beruf` (4.355) sind für den Start zu groß.
+- **Wichtig:** Der Großteil sind Scans ohne Textschicht (`16 Bank`: ~183 von
+  207 Dateien) — ohne OCR (V2) landen sie in „manuell“ und werden nicht
+  klassifiziert.
+- Optional: rclone-Sync ausgewählter OneDrive-Ordner nach Nextcloud
+  (Familie kann lokal durchblättern).
+- **Grundsatz (ab P5):** classify hält die Metadaten (SHA-256, Quellpfad,
+  Tags), die Dateien bleiben an ihrem ursprünglichen Ort.
 
 ## Tests
 
@@ -237,9 +259,11 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 2. **Domain: entschieden (12.11.2026).** `classify.lan.hammerlore.de` — wie
    MoneyMe (`moneyme.lan.`) nur im Heimnetz: Apache + Pi-hole, kein
    Cloudflare-Tunnel, aus dem Internet nicht erreichbar.
-3. **Scan-Verzeichnisse:** welche Pfade auf dem hammerpi sind die
-   Quell-Verzeichnisse? (z. B. `~/Dokumente/Posteingang`, Nextcloud-Sync-Ordner?)
-   Die App liest nur Pfade, die in der DB gepflegt sind, nie freie Pfade.
+3. **Scan-Verzeichnisse: geklärt (12.11.2026).** Quellen: (a) lokale Pfade auf
+   dem Pi — Nextcloud-Datenverzeichnis `/mnt/nvme/nextcloud/data/Micha/files`
+   (classify als `ncadmin` mit Lese-ACL), (b) OneDrive (Personal) per rclone-
+   Remote `onedrive:`. Die App liest nur Pfade, die in der DB gepflegt sind,
+   nie freie Pfade. Details: §Integration oben.
 4. **Word-Rohe:** Sind neben `.docx` auch `.doc` (binär) zu erwarten?
    `.doc` braucht LibreOffice — wenn selten, fällt es in „manuell" und wartet
    auf OCR/V2.
