@@ -4,7 +4,9 @@
   "description": "KI-gestützte Dokumenten-Klassifizierung",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f1216",
-  "theme_color": "#0f1216",
-  "icons": []
+  "background_color": "#0F2440",
+  "theme_color": "#0F2440",
+  "icons": [
+    { "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }

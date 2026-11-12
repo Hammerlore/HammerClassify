@@ -1,7 +1,15 @@
 /* HammerClassify — Service Worker (Caching der App-Shell) */
 'use strict';
-const CACHE = 'hammerclassify-v2';
-const SHELL = ['/', '/index.html', '/app.js', '/webauthn.js', '/app.css', '/hlsw-base.css', '/design-tokens.css', '/design-fonts.css', '/manifest.webmanifest'];
+const CACHE = 'hammerclassify-v3';
+const SHELL = [
+  '/', '/index.html', '/app.js', '/webauthn.js', '/app.css',
+  '/hlsw-base.css', '/design-tokens.css', '/design-fonts.css', '/manifest.webmanifest',
+  '/icons/favicon.svg',
+  '/inter-latin-400-normal.woff2', '/inter-latin-500-normal.woff2',
+  '/inter-latin-600-normal.woff2', '/inter-latin-700-normal.woff2',
+  '/jetbrains-mono-latin-400-normal.woff2', '/jetbrains-mono-latin-500-normal.woff2',
+  '/space-grotesk-latin-600-normal.woff2', '/space-grotesk-latin-700-normal.woff2',
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

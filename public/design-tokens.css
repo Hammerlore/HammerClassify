@@ -1,4 +1,4 @@
-/* HLSW Design Tokens v2.3.0 — generiert aus tokens/design-tokens.json. NICHT VON HAND BEARBEITEN. */
+/* HLSW Design Tokens v2.5.0 — generiert aus tokens/design-tokens.json. NICHT VON HAND BEARBEITEN. */
 
 :root {
   /* --- Primitive --- */
@@ -157,6 +157,12 @@
   --info-surface: #EFF6FF;
   --info-border: #BFDBFE;
 
+  /* --- Diagrammreihen --- */
+  --chart-1: #2A78D6; /* blau */
+  --chart-2: #EB6834; /* orange */
+  --chart-3: #18A070; /* gruen */
+  --chart-4: #B93D76; /* magenta */
+
   /* --- Schatten --- */
   --shadow-sm: 0 1px 2px rgba(15,36,64,0.06), 0 1px 3px rgba(15,36,64,0.10);
   --shadow-md: 0 2px 4px rgba(15,36,64,0.06), 0 4px 12px rgba(15,36,64,0.10);
@@ -212,6 +218,11 @@
   --info-surface: color-mix(in srgb, #7DD3FC 14%, transparent);
   --info-border: color-mix(in srgb, #7DD3FC 34%, transparent);
 
+  --chart-1: #3987E5; /* blau */
+  --chart-2: #D95926; /* orange */
+  --chart-3: #199E70; /* gruen */
+  --chart-4: #C24F9A; /* magenta */
+
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.40);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
   --shadow-lg: 0 12px 28px rgba(0,0,0,0.50);
@@ -265,6 +276,11 @@
   --info-strong: #7DD3FC;
   --info-surface: color-mix(in srgb, #7DD3FC 14%, transparent);
   --info-border: color-mix(in srgb, #7DD3FC 34%, transparent);
+
+  --chart-1: #3987E5; /* blau */
+  --chart-2: #D95926; /* orange */
+  --chart-3: #199E70; /* gruen */
+  --chart-4: #C24F9A; /* magenta */
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.40);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
@@ -383,35 +399,4 @@
   --accent-subtle: color-mix(in srgb, #4ADE80 14%, transparent);
   --accent-border: color-mix(in srgb, #4ADE80 34%, transparent);
   --focus-ring: color-mix(in srgb, #4ADE80 60%, transparent);
-}
-
-/* --- HammerClassify: App-Akzent Utility (Teal) — wie die data-app-Blöcke im Designsystem --- */
-[data-app="classify"] {
-  --accent: #0F766E;
-  --accent-hover: #0F766E;
-  --accent-text: #0F766E;
-  --accent-on: #FFFFFF;
-  --accent-subtle: color-mix(in srgb, #0F766E 8%, #FFFFFF);
-  --accent-border: color-mix(in srgb, #0F766E 28%, #FFFFFF);
-  --focus-ring: color-mix(in srgb, #0F766E 55%, transparent);
-}
-:root[data-theme="dark"][data-app="classify"] {
-  --accent: #2DD4BF;
-  --accent-hover: #2DD4BF;
-  --accent-text: #2DD4BF;
-  --accent-on: #050D18;
-  --accent-subtle: color-mix(in srgb, #2DD4BF 14%, transparent);
-  --accent-border: color-mix(in srgb, #2DD4BF 34%, transparent);
-  --focus-ring: color-mix(in srgb, #2DD4BF 60%, transparent);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"])[data-app="classify"] {
-    --accent: #2DD4BF;
-    --accent-hover: #2DD4BF;
-    --accent-text: #2DD4BF;
-    --accent-on: #050D18;
-    --accent-subtle: color-mix(in srgb, #2DD4BF 14%, transparent);
-    --accent-border: color-mix(in srgb, #2DD4BF 34%, transparent);
-    --focus-ring: color-mix(in srgb, #2DD4BF 60%, transparent);
-  }
 }

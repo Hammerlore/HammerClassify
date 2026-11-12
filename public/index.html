@@ -1,355 +1,327 @@
-<!DOCTYPE html>
-<html lang="de" data-app="classify">
+<!doctype html>
+<html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
-<title>HammerClassify</title>
-<link rel="stylesheet" href="design-fonts.css">
-<link rel="stylesheet" href="design-tokens.css">
-<link rel="stylesheet" href="hlsw-base.css">
-<link rel="stylesheet" href="app.css">
-<link rel="manifest" href="manifest.webmanifest">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HammerClassify</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0F2440">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Reihenfolge zählt: Schriften, Tokens, Basis, App -->
+  <link rel="stylesheet" href="design-fonts.css">
+  <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="hlsw-base.css">
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-mark" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0F2440"/><path d="M22 18v28M42 18v28M22 32h20" fill="none" stroke="#F2F6FB" stroke-width="5" stroke-linecap="round"/><circle cx="46" cy="18" r="4.5" fill="#F59E0B"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13l2.6-8h12.8L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></symbol>
+    <symbol id="i-dopp" viewBox="0 0 24 24"><path d="M9 8V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2"/><path d="M4 8a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-regel" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/><path d="M17 15l2 2 3-4"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2m10 0h2a2 2 0 0 1 2 2v2m0 10v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2m3-10 4 4 8-8"/></symbol>
+    <symbol id="i-ki" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 14h7M12.5 11.5 15 14l-2.5 2.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8L20 3M16 7l3 3M14 9l2 2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></symbol>
+    <symbol id="i-thema" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></symbol>
+    <symbol id="i-leiste" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-mehr" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></symbol>
+  </svg>
 
-<!-- ============================== ANMELDUNG ============================== -->
-<div class="login-wrap" id="view-login">
-  <div class="login-card">
-    <a class="app-logo" href="#" aria-label="HammerClassify">
-      <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="30" height="30" rx="8" fill="var(--accent-subtle)" stroke="var(--accent)" stroke-width="1.5"/>
-        <path d="M12 10v14M22 10v14M12 17h10" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>HammerClassify</span>
-    </a>
-    <h1>Dokumente klassifizieren</h1>
-    <p class="hlsw-lead">Word- und PDF-Dokumente, automatisch getaggt nach deinen Regeln.</p>
-    <div class="login-actions">
-      <button class="hlsw-btn hlsw-btn--accent" id="btn-login" type="button">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 11c2.5-2 6-1 8 1-2 2-5.5 1-8-1Zm0 0c-2.5-2-6-1-8 1 2 2 5.5 1 8-1Zm0 0v6m0-6c0-3 2-5 4-6-1-1-3-1-4 1"/></svg>
-        Mit Passkey anmelden
-      </button>
-      <button class="hlsw-btn hlsw-btn--ghost" id="btn-register" type="button" hidden>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-        Passkey registrieren
-      </button>
-    </div>
-    <div class="login-setup-row" id="setup-row" hidden>
-      <input type="password" id="setup-token" class="hlsw-input" placeholder="Einrichtungscode" autocomplete="off" aria-label="Einrichtungscode">
-      <button class="hlsw-btn hlsw-btn--ghost hlsw-btn--sm" id="btn-setup" type="button">Einrichten</button>
-    </div>
-    <p class="login-hint">Nur erreichbar im Heimnetz · Session 30 Tage · Passkey-only</p>
-    <p class="login-hint login-setup" id="login-status"></p>
-  </div>
-</div>
+  <a class="hlsw-sr-only" href="#main">Zum Inhalt springen</a>
 
-<!-- =============================== APP-SHELL ============================== -->
-<div class="app" id="app-shell" hidden>
-  <header class="app-header">
-    <a class="app-logo" href="#" aria-label="HammerClassify — Übersicht">
-      <svg width="28" height="28" viewBox="0 0 34 34" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="30" height="30" rx="8" fill="var(--accent-subtle)" stroke="var(--accent)" stroke-width="1.5"/>
-        <path d="M12 10v14M22 10v14M12 17h10" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>HammerClassify</span>
-    </a>
-    <div class="app-search">
-      <input type="search" id="search" placeholder="Suche: Titel, Text, Tag, Absender …" aria-label="Dokumente durchsuchen">
-    </div>
-    <div class="header-actions">
-      <button class="icon-btn" id="btn-theme" type="button" aria-label="Farbschema wechseln" title="Farbschema wechseln">
-        <svg id="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 13A8.5 8.5 0 1 1 11 3a7 7 0 0 0 10 10Z"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-logout" type="button" aria-label="Abmelden" title="Abmelden">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
-      </button>
-    </div>
-  </header>
+  <div class="app" id="app" hidden>
+    <div class="rahmen">
+      <header class="top">
+        <div class="top-bar">
+          <a class="brand" href="#uebersicht" aria-label="Zur Übersicht">
+            <svg aria-hidden="true"><use href="#i-mark"/></svg>
+            <span class="brand-t">HammerClassify<small>Hammerlore Softworks</small></span>
+          </a>
+          <div class="top-actions">
+            <a class="kopf-btn" href="#" data-open-upload><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="import-t">Hochladen</span></a>
+            <button class="icon-btn" id="btn-thema" type="button" aria-label="Zwischen hell und dunkel wechseln" title="Hell oder dunkel"><svg class="i" aria-hidden="true"><use href="#i-thema"/></svg></button>
+            <button class="icon-btn" id="btn-logout" type="button" aria-label="Abmelden" title="Abmelden"><svg class="i" aria-hidden="true"><use href="#i-out"/></svg></button>
+          </div>
+        </div>
+      </header>
+      <nav class="tabs" aria-label="Hauptnavigation">
+        <!-- Gruppen und Farbkacheln zeigen sich erst als Seitenleiste (ab 1100 px); die Pille setzt navPille() in app.js -->
+        <div class="nav-pille" aria-hidden="true" hidden></div>
+        <a class="g-start" href="#uebersicht" data-nav="uebersicht" title="Übersicht"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg></span><span class="nt">Übersicht</span></a>
+        <span class="nav-gruppe g-dok">Dokumente</span>
+        <a class="g-dok" href="#dokumente" data-nav="dokumente" title="Dokumente"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg></span><span class="nt">Dokumente</span><span class="cnt" id="cnt-dokumente"></span></a>
+        <span class="nav-gruppe g-werk">Werkzeuge</span>
+        <a class="g-werk" href="#regeln" data-nav="regeln" title="Regeln"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-regel"/></svg></span><span class="nt">Regeln</span><span class="cnt" id="cnt-regeln"></span></a>
+        <a class="g-werk" href="#scan" data-nav="scan" title="Scan"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-scan"/></svg></span><span class="nt">Scan</span></a>
+        <div class="nav-ki" id="nav-ki" data-ki="ok"><span class="status-dot" aria-hidden="true"></span><span id="nav-ki-text">KI-Status …</span></div>
+        <button class="nav-schalter" id="btn-nav" type="button" aria-pressed="false" title="Navigation einklappen"><span class="nk"><svg class="i" aria-hidden="true"><use href="#i-leiste"/></svg></span><span class="nt">Einklappen</span></button>
+      </nav>
+      <main id="main" class="view" tabindex="-1">
 
-  <div class="app-body">
-    <nav class="app-nav" aria-label="Hauptnavigation">
-      <a class="nav-link" href="#" data-view="dashboard" aria-current="page">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-        Übersicht
-      </a>
-      <a class="nav-link" href="#" data-view="documents">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>
-        Dokumente
-        <span class="nav-count" data-count="documents">0</span>
-      </a>
-      <a class="nav-link" href="#" data-view="rules">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M5 8l7-5 7 5M8 13l-3 8 5-3 5 3-3-8"/></svg>
-        Regeln
-        <span class="nav-count" data-count="rules">9</span>
-      </a>
-      <a class="nav-link" href="#" data-view="scan">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2m10 0h2a2 2 0 0 1 2 2v2m0 10v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2m3-10 4 4 8-8"/></svg>
-        Scan
-      </a>
-      <div class="nav-ki" id="nav-ki" data-ki="ok">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span id="nav-ki-text">KI bereit</span>
+        <!-- ============================ ÜBERSICHT ============================ -->
+        <section class="view-seite" id="view-uebersicht" aria-label="Übersicht">
+          <div class="v-head">
+            <div>
+              <h1>Übersicht</h1>
+              <p class="v-sub" id="dash-sub">Dokumente · Regeln ab P3</p>
+            </div>
+            <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span>Dokumente hochladen</span></button>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi"><span class="l">Dokumente</span><span class="v" data-stat="total">0</span><span class="s" data-note="total">noch keine diese Woche</span></div>
+            <div class="kpi"><span class="l">Imingang</span><span class="v" data-stat="imingang">0</span><span class="s" data-note="imingang">noch nicht eingeordnet</span></div>
+            <div class="kpi"><span class="l">Ohne Text</span><span class="v" data-stat="keintext">0</span><span class="s" data-note="keintext">Scans — OCR kommt mit V2</span></div>
+            <div class="kpi"><span class="l">Regeln</span><span class="v" data-stat="regeln">10</span><span class="s" data-note="regeln">Beispiele — echte Regeln ab P3</span></div>
+          </div>
+
+          <div class="raster">
+            <div class="hlsw-card span-alle">
+              <div class="card-h"><h2>Letzte Dokumente</h2></div>
+              <div class="hlsw-table-wrap">
+                <table class="hlsw-table">
+                  <thead><tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="num">Größe</th><th scope="col">Status</th><th scope="col">Datum</th></tr></thead>
+                  <tbody id="recent-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="hlsw-card">
+              <div class="card-h"><h2>KI-Status</h2></div>
+              <div class="ki-row" id="ki-row" data-ki="ok"><span class="status-dot" aria-hidden="true"></span><span id="ki-row-text">KI-Status wird geprüft …</span></div>
+              <dl class="felder ki-meta">
+                <dt>Modell</dt><dd>Qwen3.8-27B</dd>
+                <dt>Endpoint</dt><dd class="mono">omlx.lan.hammerlore.de:8443</dd>
+                <dt>Letzter Check</dt><dd id="ki-gecheckt">noch nicht</dd>
+                <dt>Durchsatz</dt><dd>ab P3</dd>
+              </dl>
+            </div>
+            <div class="hlsw-card">
+              <div class="card-h"><h2>Kategorien</h2></div>
+              <div id="dist-kat"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================ DOKUMENTE ============================ -->
+        <section class="view-seite" id="view-dokumente" aria-label="Dokumente">
+          <div class="v-head">
+            <div>
+              <h1>Dokumente</h1>
+              <p class="v-sub" id="docs-sub">0 Dokumente</p>
+            </div>
+            <div class="row">
+              <label class="suche"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><input type="search" id="search" placeholder="Suche: Titel, Text, Tag …" aria-label="Dokumente durchsuchen"></label>
+              <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span>Hochladen</span></button>
+            </div>
+          </div>
+
+          <div class="filter-row" id="filters" role="group" aria-label="Filter"></div>
+
+          <div class="hlsw-card">
+            <div class="hlsw-table-wrap">
+              <table class="hlsw-table">
+                <thead><tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="num">Größe</th><th scope="col">Status</th><th scope="col">Text</th><th scope="col">Datum</th></tr></thead>
+                <tbody id="docs-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================== REGELN ============================= -->
+        <section class="view-seite" id="view-regeln" aria-label="Regeln">
+          <div class="v-head">
+            <div>
+              <h1>Regeln</h1>
+              <p class="v-sub" id="rules-sub">Beispiel-Regeln — die echte Regeln-UI kommt mit P3</p>
+            </div>
+            <button class="hlsw-btn hlsw-btn--accent" id="btn-new-rule" type="button"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span>Neue Regel</span></button>
+          </div>
+
+          <div class="regeln-grid">
+            <div id="rules-list"></div>
+
+            <div class="hlsw-card" id="regel-form-card" hidden>
+              <div class="card-h"><h2 id="regel-form-title">Neue Regel</h2></div>
+              <form id="regel-form">
+                <div class="hlsw-field">
+                  <label for="r-name">Regel-Name</label>
+                  <input id="r-name" name="name" type="text" placeholder="z. B. Nebenkosten" required>
+                </div>
+                <div class="hlsw-field">
+                  <label for="r-tag">Erzeugtes Tag</label>
+                  <input id="r-tag" name="tag" type="text" placeholder="Nebenkosten" required>
+                </div>
+                <div class="hlsw-field">
+                  <label for="r-art">Regel-Art</label>
+                  <select id="r-art" name="art">
+                    <option value="kategorie">Kategorie (Thema)</option>
+                    <option value="typ">Typ (Rechnung, Angebot …)</option>
+                    <option value="absender">Absender</option>
+                    <option value="bedingung">Bedingung (z. B. Name + Adresse)</option>
+                  </select>
+                </div>
+                <div class="hlsw-field">
+                  <label for="r-desc">Beschreibung (natürliche Sprache — die KI interpretiert)</label>
+                  <textarea id="r-desc" name="desc" placeholder="Alles rund um Strom, Gas, Wasser, Schornsteinfeger, Müll … — sofern mein Name und meine Adresse darauf stehen."></textarea>
+                  <span class="hlsw-hint">Die Beschreibung wird zusammen mit dem Dokumententext an die KI übergeben. Je klarer, desto stabiler die Zuordnung.</span>
+                </div>
+                <div class="hlsw-field">
+                  <label for="r-kw">Stichworte (optional, als Anker für die KI)</label>
+                  <input id="r-kw" name="keywords" type="text" placeholder="Strom, Gas, Wasser, Schornsteinfeger, Müll, Grundsteuer">
+                  <span class="hlsw-hint">Komma-getrennt. Die KI prüft zusätzlich: Name + Adresse müssen im Dokument auftauchen.</span>
+                </div>
+                <div class="form-actions">
+                  <button class="hlsw-btn hlsw-btn--accent" type="submit">Speichern</button>
+                  <button class="hlsw-btn hlsw-btn--ghost" type="button" id="btn-rule-cancel">Abbrechen</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- =============================== SCAN ============================== -->
+        <section class="view-seite" id="view-scan" aria-label="Scan">
+          <div class="v-head">
+            <div>
+              <h1>Scan</h1>
+              <p class="v-sub">Pfad scannen · die KI klassifiziert die neuen Dokumente im Hintergrund — der echte Scan kommt mit P4</p>
+            </div>
+          </div>
+
+          <div class="scan-grid">
+            <div class="hlsw-card">
+              <div class="card-h"><h2>Gescannte Pfade</h2></div>
+              <div class="pfad-row">
+                <span class="pfad-path">/media/ncadmin/nextcloud/Posteingang</span>
+                <span class="pfad-count">14 neu</span>
+                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="nextcloud" type="button">Jetzt scannen</button>
+              </div>
+              <div class="pfad-row">
+                <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Post</span>
+                <span class="pfad-count">2 neu</span>
+                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="post" type="button">Jetzt scannen</button>
+              </div>
+              <div class="pfad-row">
+                <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Finanzen</span>
+                <span class="pfad-count">aktuell</span>
+                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="finanzen" type="button">Jetzt scannen</button>
+              </div>
+              <div class="pfad-row">
+                <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Verträge</span>
+                <span class="pfad-count">aktuell</span>
+                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="vertraege" type="button">Jetzt scannen</button>
+              </div>
+            </div>
+
+            <div class="hlsw-card">
+              <div class="card-h"><h2>Warteschlange</h2></div>
+              <div id="queue-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================ DOKUMENT ============================= -->
+        <section class="view-seite" id="view-dokument" aria-label="Dokument">
+          <a class="zurueck" href="#dokumente"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg>Zurück</a>
+          <div class="v-head">
+            <div>
+              <h1 id="doc-title">—</h1>
+              <p class="v-sub" id="doc-sub">—</p>
+            </div>
+          </div>
+
+          <div class="hlsw-alert hlsw-alert--warning" id="doc-alert" hidden>
+            <span class="hlsw-alert-dot" aria-hidden="true"></span>
+            <p id="doc-alert-text"></p>
+          </div>
+
+          <div class="detail-grid">
+            <div class="hlsw-card">
+              <div class="card-h"><h2>Dokumententext (extrahiert)</h2></div>
+              <div class="doc-text" id="doc-text"></div>
+            </div>
+            <div class="stack">
+              <div class="hlsw-card">
+                <div class="card-h"><h2>Zugeordnete Tags</h2></div>
+                <div class="tag-list" id="doc-tags"></div>
+                <div class="doc-actions">
+                  <button class="hlsw-btn hlsw-btn--accent" id="btn-reclassify" type="button" disabled title="Klassifizierung ab P3 (Regeln + KI)"><svg class="i" aria-hidden="true"><use href="#i-ki"/></svg><span>Neu klassifizieren</span></button>
+                  <button class="hlsw-btn hlsw-btn--ghost" id="btn-export" type="button"><svg class="i" aria-hidden="true"><use href="#i-export"/></svg><span>Als .md exportieren</span></button>
+                  <button class="hlsw-btn hlsw-btn--ghost" id="btn-download" type="button"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>Original laden</span></button>
+                </div>
+              </div>
+              <div class="hlsw-card">
+                <div class="card-h"><h2>Metadaten</h2></div>
+                <dl class="felder" id="doc-meta"></dl>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+    <nav class="unten" aria-label="Hauptnavigation unten">
+      <a href="#uebersicht" data-nav="uebersicht"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg>Übersicht</a>
+      <a href="#dokumente" data-nav="dokumente"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Dokumente</a>
+      <a href="#regeln" data-nav="regeln"><svg class="i" aria-hidden="true"><use href="#i-regel"/></svg>Regeln</a>
+      <a href="#scan" data-nav="scan"><svg class="i" aria-hidden="true"><use href="#i-scan"/></svg>Scan</a>
+      <button type="button" id="unten-mehr" popovertarget="mehr-menu"><svg class="i" aria-hidden="true"><use href="#i-mehr"/></svg>Mehr</button>
+      <div id="mehr-menu" popover class="mehr-menu">
+        <a href="#dokumente" data-nav="dokumente">Dokumente</a>
+        <a href="#regeln" data-nav="regeln">Regeln</a>
+        <a href="#scan" data-nav="scan">Scan</a>
       </div>
     </nav>
-
-    <main class="app-main">
-
-      <!-- ============================ ÜBERSICHT ============================ -->
-      <section class="view active" id="view-dashboard" aria-label="Übersicht">
-        <div class="view-head">
-          <div>
-            <h1>Übersicht</h1>
-            <p class="view-sub">Dokumente · Regeln ab P3</p>
-          </div>
-          <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/></svg>
-            Dokumente hochladen
-          </button>
-        </div>
-
-        <div class="stat-grid">
-          <div class="stat-card">
-            <span class="stat-label">Dokumente</span>
-            <span class="stat-value" data-stat="total">23</span>
-            <span class="stat-note">+3 diese Woche</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Rechnungen</span>
-            <span class="stat-value" data-stat="rechnungen">11</span>
-            <span class="stat-note">2 offene &gt; 30 Tage</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Offene Fristen</span>
-            <span class="stat-value" data-stat="fristen">4</span>
-            <span class="stat-note">nächste: 18.10. · Kündigung</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Unklassifiziert</span>
-            <span class="stat-value" data-stat="unclassified">2</span>
-            <span class="stat-note">Konfidenz &lt; 0.5</span>
-          </div>
-        </div>
-
-        <div class="two-col">
-          <div class="hlsw-card card">
-            <h2>Kategorien</h2>
-            <div id="dist-kat"></div>
-          </div>
-          <div class="hlsw-card card">
-            <h2>KI-Status</h2>
-            <div class="ki-row" data-ki="ok"><span class="status-dot" aria-hidden="true"></span> OMLX erreichbar</div>
-            <dl class="ki-meta">
-              <dt>Modell</dt><dd>Qwen3.8-27B</dd>
-              <dt>Endpoint</dt><dd>omlx.lan.hammerlore.de:8443</dd>
-              <dt>Letzter Check</dt><dd>vor 2 Min.</dd>
-              <dt>Durchsatz</dt><dd>~1,2 S/Min.</dd>
-            </dl>
-          </div>
-        </div>
-
-        <div class="hlsw-card card">
-          <h2>Letzte Dokumente</h2>
-          <table class="hlsw-table">
-            <thead>
-              <tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="hlsw-table--num">Größe</th><th scope="col">Status</th><th scope="col">Datum</th></tr>
-            </thead>
-            <tbody id="recent-tbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============================ DOKUMENTE ============================ -->
-      <section class="view" id="view-documents" aria-label="Dokumente">
-        <div class="view-head">
-          <div>
-            <h1>Dokumente</h1>
-            <p class="view-sub"><span data-stat="total">0</span> Dokumente · Regeln ab P3</p>
-          </div>
-          <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/></svg>
-            Hochladen
-          </button>
-        </div>
-
-        <div class="filter-row" id="filters" role="group" aria-label="Filter"></div>
-
-        <div class="hlsw-card">
-          <table class="hlsw-table">
-            <thead>
-              <tr><th scope="col">Dokument</th><th scope="col">Typ</th><th scope="col" class="hlsw-table--num">Größe</th><th scope="col">Status</th><th scope="col">Text</th><th scope="col">Datum</th></tr>
-            </thead>
-            <tbody id="docs-tbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============================== REGELN ============================= -->
-      <section class="view" id="view-rules" aria-label="Regeln">
-        <div class="view-head">
-          <div>
-            <h1>Regeln</h1>
-            <p class="view-sub">Zentrale Definition der Klassifizierung · Regeln-UI ab P3</p>
-          </div>
-          <button class="hlsw-btn hlsw-btn--accent" id="btn-new-rule" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            Neue Regel
-          </button>
-        </div>
-
-        <div class="rules-grid">
-          <div id="rules-list"></div>
-
-          <div class="hlsw-card card" id="regel-form-card" hidden>
-            <h3 id="regel-form-title">Neue Regel</h3>
-            <form id="regel-form">
-              <div class="hlsw-field">
-                <label for="r-name">Regel-Name</label>
-                <input id="r-name" name="name" type="text" placeholder="z. B. Nebenkosten" required>
-              </div>
-              <div class="hlsw-field">
-                <label for="r-tag">Erzeugtes Tag</label>
-                <input id="r-tag" name="tag" type="text" placeholder="Nebenkosten" required>
-              </div>
-              <div class="hlsw-field">
-                <label for="r-art">Regel-Art</label>
-                <select class="hlsw-select" id="r-art" name="art">
-                  <option value="kategorie">Kategorie (Thema)</option>
-                  <option value="typ">Typ (Rechnung, Angebot …)</option>
-                  <option value="absender">Absender</option>
-                  <option value="bedingung">Bedingung (z. B. Name + Adresse)</option>
-                </select>
-              </div>
-              <div class="hlsw-field">
-                <label for="r-desc">Beschreibung (natürliche Sprache — die KI interpretiert)</label>
-                <textarea id="r-desc" name="desc" placeholder="Alles rund um Strom, Gas, Wasser, Schornsteinfeger, Müll … — sofern mein Name und meine Adresse darauf stehen."></textarea>
-                <p class="hlsw-hint">Die Beschreibung wird zusammen mit dem Dokumententext an die KI übergeben. Je klarer, desto stabiler die Zuordnung.</p>
-              </div>
-              <div class="hlsw-field">
-                <label for="r-kw">Stichworte (optional, als Anker für die KI)</label>
-                <input id="r-kw" name="keywords" type="text" placeholder="Strom, Gas, Wasser, Schornsteinfeger, Müll, Grundsteuer">
-                <p class="hlsw-hint">Komma-getrennt. Die KI prüft zusätzlich: Name + Adresse müssen im Dokument auftauchen.</p>
-              </div>
-              <div class="form-actions">
-                <button class="hlsw-btn hlsw-btn--accent" type="submit">Speichern</button>
-                <button class="hlsw-btn hlsw-btn--ghost" type="button" id="btn-rule-cancel">Abbrechen</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      <!-- =============================== SCAN ============================== -->
-      <section class="view" id="view-scan" aria-label="Scan">
-        <div class="view-head">
-          <div>
-            <h1>Scan</h1>
-            <p class="view-sub">Pfad scannen · die KI klassifiziert die neuen Dokumente im Hintergrund</p>
-          </div>
-        </div>
-
-        <div class="scan-grid">
-          <div class="hlsw-card card">
-            <h3>Gescannte Pfade</h3>
-            <div class="pfad-row">
-              <span class="pfad-path">/media/ncadmin/nextcloud/Posteingang</span>
-              <span class="pfad-count">14 neu</span>
-              <button class="hlsw-btn hlsw-btn--ghost hlsw-btn--sm" data-scan-pfad="nextcloud" type="button">Jetzt scannen</button>
-            </div>
-            <div class="pfad-row">
-              <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Post</span>
-              <span class="pfad-count">2 neu</span>
-              <button class="hlsw-btn hlsw-btn--ghost hlsw-btn--sm" data-scan-pfad="post" type="button">Jetzt scannen</button>
-            </div>
-            <div class="pfad-row">
-              <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Finanzen</span>
-              <span class="pfad-count">aktuell</span>
-              <button class="hlsw-btn hlsw-btn--ghost hlsw-btn--sm" data-scan-pfad="finanzen" type="button">Jetzt scannen</button>
-            </div>
-            <div class="pfad-row">
-              <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Verträge</span>
-              <span class="pfad-count">aktuell</span>
-              <button class="hlsw-btn hlsw-btn--ghost hlsw-btn--sm" data-scan-pfad="vertraege" type="button">Jetzt scannen</button>
-            </div>
-          </div>
-
-          <div class="hlsw-card card">
-            <h3>Warteschlange</h3>
-            <div id="queue-list"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============================ DOKUMENT ============================= -->
-      <section class="view" id="view-document" aria-label="Dokument">
-        <div class="view-head">
-          <button class="hlsw-btn hlsw-btn--ghost back-btn" data-view="documents" type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-            Zurück
-          </button>
-          <div>
-            <h1 id="doc-title">—</h1>
-            <p class="view-sub" id="doc-sub">—</p>
-          </div>
-        </div>
-
-        <div class="hlsw-alert hlsw-alert--info" id="doc-alert" hidden>
-          <p>2 Tags mit niedriger Konfidenz (< 0.6) — bitte prüfen.</p>
-        </div>
-
-        <div class="detail-grid">
-          <div class="hlsw-card card">
-            <h3>Dokumententext (extrahiert)</h3>
-            <div class="doc-text" id="doc-text"></div>
-          </div>
-          <div>
-            <div class="hlsw-card card">
-              <h3>Zugeordnete Tags</h3>
-              <div class="tag-list" id="doc-tags"></div>
-              <div class="doc-actions">
-                <button class="hlsw-btn hlsw-btn--accent" id="btn-reclassify" type="button" disabled title="Klassifizierung ab P3 (Regeln + KI)">Neu klassifizieren</button>
-                <button class="hlsw-btn hlsw-btn--ghost" id="btn-export" type="button">Als .md exportieren</button>
-                <button class="hlsw-btn hlsw-btn--ghost" id="btn-download" type="button">Original laden</button>
-              </div>
-            </div>
-            <div class="hlsw-card card">
-              <h3>Metadaten</h3>
-              <dl class="meta-list" id="doc-meta"></dl>
-            </div>
-          </div>
-        </div>
-      </section>
-
-    </main>
   </div>
-</div>
 
-<!-- =========================== UPLOAD-DIALOG ============================= -->
-<dialog class="upload" id="upload-dialog">
-  <div class="upload-head">
-    <h2>Dokumente hochladen</h2>
-    <button class="icon-btn" id="btn-upload-close" type="button" aria-label="Schließen">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
-  </div>
-  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Dateien hierher ziehen oder klicken zum Auswählen">
-    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/></svg>
-    <strong>Dateien hierher ziehen oder klicken</strong>
-    <small>.pdf, .docx, .zip · max. 25 MB pro Datei · Klick öffnet den Datei-Dialog</small>
-  </div>
-  <input type="file" id="file-input" multiple accept=".pdf,.docx,.zip" hidden aria-hidden="true">
-  <div class="upload-files" id="upload-files" hidden></div>
-  <div class="upload-progress" id="upload-progress">
-    <div class="progress"><span id="upload-bar" style="width: 0%"></span></div>
-    <p id="upload-status">Wird hochgeladen …</p>
-  </div>
-  <div class="upload-foot">
-    <button class="hlsw-btn hlsw-btn--ghost" id="btn-upload-cancel" type="button">Abbrechen</button>
-    <button class="hlsw-btn hlsw-btn--accent" id="btn-upload-start" type="button" disabled>Hochladen</button>
-  </div>
-</dialog>
+  <section class="login" id="login" hidden>
+    <div class="login-card">
+      <svg class="mark" aria-hidden="true"><use href="#i-mark"/></svg>
+      <div><h1>HammerClassify</h1><p id="login-text">Nur für registrierte Geräte.</p></div>
+      <div id="login-body" class="login-body"></div>
+    </div>
+  </section>
 
-<script src="webauthn.js"></script>
-<script src="app.js"></script>
+  <!-- =========================== UPLOAD-DIALOG ============================= -->
+  <dialog class="upload" id="upload-dialog">
+    <div class="upload-head">
+      <h2>Dokumente hochladen</h2>
+      <button class="icon-btn" id="btn-upload-close" type="button" aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Dateien hierher ziehen oder klicken zum Auswählen">
+      <svg class="i drop-i" aria-hidden="true"><use href="#i-upload"/></svg>
+      <strong>Dateien hierher ziehen oder klicken</strong>
+      <small>.pdf, .docx, .zip · max. 25 MB pro Datei · Klick öffnet den Datei-Dialog</small>
+    </div>
+    <input type="file" id="file-input" multiple accept=".pdf,.docx,.zip" hidden aria-hidden="true">
+    <div class="upload-files" id="upload-files" hidden></div>
+    <div class="upload-progress" id="upload-progress">
+      <div class="progress"><span id="upload-bar"></span></div>
+      <p id="upload-status">Wird hochgeladen …</p>
+    </div>
+    <div class="upload-foot">
+      <button class="hlsw-btn hlsw-btn--ghost" id="btn-upload-cancel" type="button">Abbrechen</button>
+      <button class="hlsw-btn hlsw-btn--accent" id="btn-upload-start" type="button" disabled>Hochladen</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="webauthn.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
