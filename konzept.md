@@ -33,20 +33,25 @@ interne Sicherheitsmaßstab (siehe „Security-First"), nicht „Keine Daten erf
 
 ## Regelschema
 
-Zwei Tag-Arten, ein Modell:
+Drei Arten, ein Modell:
 
 | Feld | Bedeutung |
 |---|---|
 | `name` | Anzeigename, z. B. „Nebenkosten" |
-| `art` | `kategorie` (Thema) oder `dokumenttyp` (Rechnung, Angebot, Kündigung, …) |
+| `art` | `kategorie` (Thema) oder `dokumenttyp` (Rechnung, Angebot, Kündigung, …) oder `feld` (zu extrahierender Wert: Rechnungsdatum, Zahlungsmethode, …) |
 | `beschreibung` | Freitext, den die KI als Regel liest — formuliert wie ein Mensch |
 | `schluesselwoerter` | Freie Liste, z. B. „Strom, Gas, Wasser, Schornsteinfeger, Müll, EHE, RWE" |
-| `bedingung` | Optional: `eigener_name_adresse` — Tag greift nur, wenn der Inhaber (Name/Adresse aus den Einstellungen) vorkommt |
+| `bedingung` | Optional (nur Kategorien/Dokumenttypen): `eigener_name_adresse` — Tag greift nur, wenn der Inhaber (Name/Adresse aus den Einstellungen) vorkommt |
 | `beispiel` | Optional: echtes Zitat, das als Exemplar in den Prompt darf |
 
 Beispiel „Nebenkosten": Beschreibung „Alles zu Energie und Infrastrukturdiensten
 der Wohnung: Strom, Gas, Wasser, Schornsteinfeger, Müll, Comcast, Umlagen.",
 Schlüsselwörter wie oben, Bedingung `eigener_name_adresse`.
+
+Ein **Feld** ist kein Tag, sondern ein Wert, den die KI aus dem Dokument
+extrahiert (z. B. `Rechnungsdatum` → „2026-10-31", `Zahlungsmethode` →
+„Überweisung"). Wie bei Tags darf die KI nur Namen aus dem Regel-Set ausgeben;
+im Ergebnis landen die Werte in `felder` (siehe unten).
 
 Daneben einmalig pflegbare **Inhaber-Profile** (Name, Straßen-Adresse, ggf. Kundennummer):
 sie dienen den Bedingungen, nie als Fragtext, und erscheinen im Prompt verallgemeinert.
@@ -57,6 +62,12 @@ prüft der Server zusätzlich deterministisch: Hat die Bedingung, dann muss der
 Inhaber-Name oder die Adresse im Volltext vorkommen, sonst wird das Tag verworfen
 und das wird in der Bestätigung gezeigt („Tag „Nebenkosten" verworfen: kein
 Inhaber-Name im Dokument").
+
+Robustheit gegen kleine Modelle (im Feld beobachtet, Qwen3.8-27B-4bit):
+- Ergebnis in ein Top-Level-Array verpackt → wird aufgewickelt bzw. als
+  Kategorien-Liste übernommen (mit Transparenz-Hinweis im Vorschlag).
+- Dokumenttyp-Name, der unter „kategorien" gelandet ist (Typ-Vertauschung) →
+  wird als `dokumenttyp` übernommen statt verworfen.
 
 ## Datenfluss
 
@@ -109,16 +120,26 @@ passt mit ~5k Tokens locker.
   "betraege": [{"art": "brutto", "wert_cents": 8420}],
   "beleg_erforderlich": true,
   "kern": "Stromrechnung Mai 2026, RWE, Lieferung Strom …",
+  "felder": [
+    {"name": "Rechnungsdatum", "wert": "2026-05-12"},
+    {"name": "Zahlungsmethode", "wert": "Überweisung"}
+  ],
   "vertrauen_gesamt": 0.91
 }
 ```
+
+`absender` ist der Aussteller des Dokuments (bei Rechnungen der Rechnungssteller),
+`datum` das Rechnungsdatum bzw. das wichtigste Datum. `felder` trägt die Werte der
+Feld-Regeln — die Namen kommen aus dem Regel-Set, die Werte sind kurzer Text in der
+Originalsprache (max. 200 Zeichen pro Wert).
 
 Das Schema ist eine feste Version im Code (`src/ergebnis.js`, Browser und Server
 importieren dieselbe Datei — Muster aus `steuer.js` in Management). Die KI darf
 nur diese Felder mit Gültigkeit befüllen; das Servicerühpaket heißt
 `FELDER`-Prüfung wie in Management: unbekannte Felder werden verworfen,
 Kennzeichnung muss Tag aus dem Regel-Set sein, Zahlen müssen plausibel sein,
-`stellen` muss im Volltext vorkommen (Grounding: kein Tag ohne Zitatbeleg).
+`stellen` muss im Volltext vorkommen (Grounding: kein Tag ohne Zitatbeleg),
+`felder` nur Namen aus dem Regel-Set (art `feld`).
 
 ## Security-First
 

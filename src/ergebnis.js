@@ -19,7 +19,7 @@ export const SCHEMA_VERSION = 1;
 /** Die einzigen Felder, die die KI befüllen darf (konzept.md, Erwartetes Ergebnis). */
 export const FELDER = [
   'dokumenttyp', 'kategorien', 'absender', 'datum',
-  'betraege', 'beleg_erforderlich', 'kern', 'vertrauen_gesamt',
+  'betraege', 'beleg_erforderlich', 'kern', 'vertrauen_gesamt', 'felder',
 ];
 
 /** Erlaubte Arten eines Betrags. */
@@ -31,6 +31,7 @@ export const MAX_ABSENDER = 200;
 export const MAX_KERN = 500;
 export const MAX_STELLEN = 10;
 export const MAX_STELLE = 300; // ein Zitat ist ein Satz, kein Absatz
+export const MAX_FELD_WERT = 200; // ein extrahierter Wert ist kurz, kein Absatz
 
 /** Normalisiert für Vergleiche: kleingeschrieben, Leerläufe zusammengezogen. */
 export const norm = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -149,11 +150,16 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
     }
   }
 
-  /* kategorien: [{ name, konfidenz, stellen }] — Regel-Set + Grounding */
+  /* kategorien: [{ name, konfidenz, stellen }] — Regel-Set + Grounding.
+     Typ-Vertauschung-Rettung: kleine Modelle landen mit dem Dokumenttyp
+     gelegentlich in der Kategorien-Liste (beobachtet: „Rechnung" als
+     Kategorie). Ein Name, der nur im Dokumenttyp-Regel-Set existiert, wird
+     als dokumenttyp übernommen statt verworfen. */
   if ('kategorien' in raw) {
     const liste = Array.isArray(raw.kategorien) ? raw.kategorien : [];
     const kat = [];
     const gesehen = new Set();
+    let strafferTyp = null; // { name, konfidenz } — höchster Treffer gewinnt
     for (const k of liste) {
       const name = k && typeof k === 'object' && typeof k.name === 'string' ? k.name.trim() : '';
       if (!name) {
@@ -161,6 +167,13 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
         continue;
       }
       if (!katNamen.has(norm(name))) {
+        if (typNamen.has(norm(name))) {
+          const konf = istKonfidenz(k.konfidenz) ? k.konfidenz : null;
+          if (!strafferTyp || (konf != null && (strafferTyp.konfidenz == null || konf > strafferTyp.konfidenz))) {
+            strafferTyp = { name, konfidenz: konf };
+          }
+          continue;
+        }
         verworfen.push(`Kategorie „${name}“ verworfen: nicht im Regel-Set`);
         continue;
       }
@@ -179,6 +192,14 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
       kat.push({ name, konfidenz: istKonfidenz(k.konfidenz) ? k.konfidenz : null, stellen });
     }
     if (kat.length) ergebnis.kategorien = kat;
+    if (strafferTyp) {
+      if (!ergebnis.dokumenttyp) {
+        ergebnis.dokumenttyp = strafferTyp;
+        verworfen.push(`„${strafferTyp.name}“ war unter Kategorien gelistet — als Dokumenttyp übernommen.`);
+      } else if (norm(strafferTyp.name) !== norm(ergebnis.dokumenttyp.name)) {
+        verworfen.push(`„${strafferTyp.name}“ verworfen: ist ein Dokumenttyp, aber „${ergebnis.dokumenttyp.name}“ ist bereits vergeben`);
+      }
+    }
   }
 
   /* absender: freier Text, begrenzt */
@@ -247,6 +268,34 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
     }
   }
 
+  /* felder: benutzerdefinierte Extraktion („Rechnungsdatum", „Zahlungsmethode", …)
+     Die Feld-Namen kommen aus dem Regel-Set (art=feld) — wie bei Tags darf die
+     KI nur vorgegebene Namen befüllen, keine eigenen erfinden. */
+  if ('felder' in raw) {
+    const feldNamen = new Set(
+      regeln.filter((r) => r.art === 'feld').map((r) => norm(r.name)),
+    );
+    const liste = Array.isArray(raw.felder) ? raw.felder : [];
+    const felder = [];
+    for (const f of liste) {
+      if (!f || typeof f !== 'object') continue;
+      const name = typeof f.name === 'string' ? f.name.trim() : '';
+      if (!name || !feldNamen.has(norm(name))) {
+        if (name) verworfen.push(`Feld „${name.slice(0, 40)}“ verworfen: nicht im Regel-Set`);
+        continue;
+      }
+      const wert = typeof f.wert === 'string' ? f.wert.trim() : '';
+      if (!wert) {
+        if (f.wert != null) verworfen.push(`Feld „${name}“ verworfen: kein Text`);
+        continue;
+      }
+      if (!felder.some((x) => norm(x.name) === norm(name))) {
+        felder.push({ name, wert: wert.slice(0, MAX_FELD_WERT) });
+      }
+    }
+    if (felder.length) ergebnis.felder = felder;
+  }
+
   /* Unbekannte Felder: still verwerfen (die KI darf nur FELDER befüllen) */
   for (const f of Object.keys(raw)) {
     if (!FELDER.includes(f)) verworfen.push(`Feld „${f}“ verworfen: unbekannt`);
@@ -258,7 +307,13 @@ export function pruefeErgebnis(raw, { regeln = [], volltext = '', inhaber = null
 
   if (arrayRettung === 'kategorien') {
     // Transparenz: der Vorschlag ist unvollständig — das soll der Nutzer sehen.
-    verworfen.push('KI-Antwort war nur eine Liste — als Kategorien übernommen; übrige Felder (Dokumenttyp, Absender, Datum, Beträge) fehlen.');
+    const fehlt = [];
+    if (geprueft.dokumenttyp == null) fehlt.push('Dokumenttyp');
+    if (geprueft.absender == null) fehlt.push('Absender');
+    if (geprueft.datum == null) fehlt.push('Datum');
+    if (geprueft.betraege == null) fehlt.push('Beträge');
+    if (regeln.some((r) => r.art === 'feld') && geprueft.felder == null) fehlt.push('Felder');
+    verworfen.push(`KI-Antwort war nur eine Liste — als Kategorien übernommen; fehlt: ${fehlt.join(', ') || 'nichts'}.`);
   } else if (arrayRettung === 'objekt') {
     verworfen.push('KI-Antwort war in ein Array verpackt — das Ergebnis-Objekt wurde übernommen.');
   }

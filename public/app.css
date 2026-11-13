@@ -330,6 +330,8 @@ dialog::backdrop { background: color-mix(in srgb, var(--hero) 55%, transparent);
 .tag-chip .konf { font: var(--type-caption); font-weight: 400; color: var(--text-muted); }
 .tag-chip[data-art="kategorie"] { background: var(--accent-subtle); border-color: var(--accent-border); }
 .tag-chip[data-art="dokumenttyp"] { background: var(--kat-violett-s); border-color: color-mix(in srgb, var(--kat-violett) 35%, transparent); }
+.tag-chip[data-art="feld"] { background: var(--kat-blau-s); border-color: color-mix(in srgb, var(--kat-blau) 35%, transparent); }
+.felder-ki { margin-top: var(--space-2); }
 .stellen { margin: var(--space-2) 0 0; padding: 0 0 0 var(--space-5); list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .stellen li { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
 #doc-verworfen { margin-bottom: var(--space-5); }

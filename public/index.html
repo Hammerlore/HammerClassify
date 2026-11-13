@@ -175,7 +175,9 @@
                   <select id="r-art" name="art">
                     <option value="kategorie">Kategorie (Thema: Nebenkosten, Miete, …)</option>
                     <option value="dokumenttyp">Dokumenttyp (Rechnung, Angebot, Kündigung, …)</option>
+                    <option value="feld">Feld (Wert extrahieren: Rechnungsdatum, Zahlungsmethode, …)</option>
                   </select>
+                  <span class="hlsw-hint">Kategorien und Dokumenttypen sind Tags, die die KI vergibt. Ein Feld ist ein Wert, den die KI aus dem Dokument extrahiert (z. B. „Rechnungsdatum: 2026-10-30").</span>
                 </div>
                 <div class="hlsw-field">
                   <label for="r-desc">Beschreibung (natürliche Sprache — die KI interpretiert)</label>
@@ -187,7 +189,7 @@
                   <input id="r-kw" name="schluesselwoerter" type="text" placeholder="Strom, Gas, Wasser, Schornsteinfeger, Müll, Grundsteuer">
                   <span class="hlsw-hint">Komma-getrennt, max. 50 — die KI beachtet sie zusätzlich zur Beschreibung.</span>
                 </div>
-                <div class="hlsw-field">
+                <div class="hlsw-field" id="r-bed-field">
                   <label for="r-bed">Bedingung (optional)</label>
                   <select id="r-bed" name="bedingung">
                     <option value="">— keine —</option>

@@ -427,6 +427,72 @@ test('ergebnis: Ergebnis-Objekt in Ein-Element-Array verpackt → aufwickeln', (
   assert.ok(verworfen.some((v) => v.includes('in ein Array verpackt')));
 });
 
+test('ergebnis: Dokumenttyp-Name unter Kategorien → als dokumenttyp übernommen', () => {
+  // Typ-Vertauschung (beobachtet: „Rechnung" als Kategorie gelistet,
+  // Dokumenttyp dadurch leer): ein Name, der nur im Dokumenttyp-Regel-Set
+  // existiert, wird als dokumenttyp übernommen statt verworfen.
+  const { ok, ergebnis, verworfen } = pruefeErgebnis({
+    kategorien: [
+      { name: 'Strom', konfidenz: 0.9, stellen: ['Rechnung Strom Q3 2026'] },
+      { name: 'Rechnung', konfidenz: 0.95 },
+    ],
+  }, { regeln: REGELN, volltext: VOLLTEXT, inhaber: INHABER });
+  assert.equal(ok, true);
+  assert.deepEqual(ergebnis.dokumenttyp, { name: 'Rechnung', konfidenz: 0.95 });
+  assert.deepEqual(ergebnis.kategorien.map((k) => k.name), ['Strom']);
+  assert.ok(verworfen.some((v) => v.includes('als Dokumenttyp übernommen')));
+});
+
+test('ergebnis: Top-Level-Array mit Dokumenttyp-Eintrag → Rettung inkl. dokumenttyp', () => {
+  // Der reale Fall: das Modell liefert nur eine Liste, in der neben
+  // Kategorien auch der Dokumenttyp steckt.
+  const { ok, ergebnis, verworfen } = pruefeErgebnis([
+    { name: 'Strom', konfidenz: 0.9, stellen: ['Rechnung Strom Q3 2026'] },
+    { name: 'Rechnung', konfidenz: 0.95 },
+  ], { regeln: REGELN, volltext: VOLLTEXT, inhaber: INHABER });
+  assert.equal(ok, true);
+  assert.equal(ergebnis.dokumenttyp.name, 'Rechnung');
+  assert.deepEqual(ergebnis.kategorien.map((k) => k.name), ['Strom']);
+  const hinweis = verworfen.find((v) => v.includes('nur eine Liste'));
+  assert.ok(hinweis, 'Transparenz-Hinweis fehlt');
+  assert.ok(!hinweis.includes('Dokumenttyp'), 'Dokumenttyp wurde gerettet, darf nicht als fehlend gelten');
+});
+
+test('ergebnis: felder — Regel-Set, Werte, Duplikate, fremde Namen', () => {
+  const regeln = [
+    ...REGELN,
+    { id: 5, name: 'Rechnungsdatum', art: 'feld', beschreibung: 'Das Ausstellungsdatum der Rechnung', schluesselwoerter: ['datum'], bedingung: null, beispiel: null },
+    { id: 6, name: 'Zahlungsmethode', art: 'feld', beschreibung: 'Wie bezahlt wurde', schluesselwoerter: [], bedingung: null, beispiel: null },
+  ];
+  const roh = {
+    felder: [
+      { name: 'Rechnungsdatum', wert: '2026-10-31' },
+      { name: 'Rechnungsdatum', wert: '31.10.2026' }, // Duplikat → erster bleibt
+      { name: 'Zahlungsmethode', wert: 'Überweisung' },
+      { name: 'Quatsch', wert: 'x' },                // nicht im Regel-Set
+      { name: 'Zahlungsmethode', wert: '   ' },      // leer
+    ],
+  };
+  const { ok, ergebnis, verworfen } = pruefeErgebnis(roh, { regeln, volltext: VOLLTEXT, inhaber: INHABER });
+  assert.equal(ok, true);
+  assert.deepEqual(ergebnis.felder, [
+    { name: 'Rechnungsdatum', wert: '2026-10-31' },
+    { name: 'Zahlungsmethode', wert: 'Überweisung' },
+  ]);
+  assert.ok(verworfen.some((v) => v.includes('Quatsch') && v.includes('Regel-Set')));
+  assert.ok(verworfen.some((v) => v.includes('Zahlungsmethode') && v.includes('kein Text')));
+});
+
+test('ergebnis: felder ohne Feld-Regeln im Set → alles verworfen', () => {
+  const { ok, ergebnis, verworfen } = pruefeErgebnis(
+    { felder: [{ name: 'Rechnungsdatum', wert: '2026-10-31' }] },
+    { regeln: REGELN, volltext: VOLLTEXT, inhaber: INHABER }, // nur kategorie/dokumenttyp
+  );
+  assert.equal(ok, false); // nichts anderes verwertbar
+  assert.equal(ergebnis, null);
+  assert.ok(verworfen.some((v) => v.includes('Rechnungsdatum') && v.includes('Regel-Set')));
+});
+
 test('ergebnis: Bedingung eigener_name_adresse — Inhaber im Text → bleibt', () => {
   const { ergebnis, verworfen } = bedingungenPruefen(
     { dokumenttyp: { name: 'Rechnung', konfidenz: 1 }, kategorien: [{ name: 'Eigenes', konfidenz: 0.8, stellen: ['x'] }] },
@@ -524,6 +590,17 @@ test('prompt: ohne Inhaber-Profil → Hinweis, inhaberDa:false', () => {
 test('prompt: ohne Regeln → Hinweis statt leerer Liste', () => {
   const { prompt } = bauePrompt({ volltext: VOLLTEXT, regeln: [], inhaber: null });
   assert.ok(prompt.includes('Keine Regeln gepflegt'));
+});
+
+test('prompt: Feld-Regeln → Schema-Eintrag „felder" + Extraktion-Anweisung', () => {
+  const regeln = [
+    ...REGELN,
+    { id: 5, name: 'Rechnungsdatum', art: 'feld', beschreibung: 'Das Ausstellungsdatum', schluesselwoerter: ['datum'], bedingung: null, beispiel: null },
+  ];
+  const { prompt } = bauePrompt({ volltext: VOLLTEXT, regeln, inhaber: INHABER });
+  assert.ok(prompt.includes('- Rechnungsdatum (Feld)'), 'Feld-Regel fehlt');
+  assert.ok(prompt.includes('"felder"'), 'Schema-Eintrag fehlt');
+  assert.ok(prompt.includes('extrahiere'), 'Extraktion-Anweisung fehlt');
 });
 
 /* ---------------------------------- DB ----------------------------------- */
@@ -644,7 +721,9 @@ test('Server: POST /api/rules — doppelter Name (gleiche Art) → 409', async (
     body: JSON.stringify({ name: 'Strom', art: 'kategorie', beschreibung: 'Nochmal Strom' }),
   });
   assert.equal(r.status, 409);
-  assert.match((await r.json()).fehler, /bereits eine kategorie/);
+  const fehler = (await r.json()).fehler;
+  assert.match(fehler, /bereits eine Regel/);
+  assert.match(fehler, /Kategorie/);
 });
 
 test('Server: restliche Regeln anlegen (Wasser, Rechnung, Eigenes, Temp)', async () => {
@@ -657,6 +736,31 @@ test('Server: restliche Regeln anlegen (Wasser, Rechnung, Eigenes, Temp)', async
     const r = await fetch(`${base}/api/rules`, { method: 'POST', headers: { ...headers(), ...json }, body: JSON.stringify(body) });
     assert.equal(r.status, 201, JSON.stringify(body));
   }
+  const liste = await (await fetch(`${base}/api/rules`, { headers: headers() })).json();
+  assert.equal(liste.regeln.length, 5);
+});
+
+test('Server: POST /api/rules — Feld (art=feld) → 201; mit Bedingung → 400', async () => {
+  const ok = await fetch(`${base}/api/rules`, {
+    method: 'POST',
+    headers: { ...headers(), ...json },
+    body: JSON.stringify({ name: 'Rechnungsdatum', art: 'feld', beschreibung: 'Das Ausstellungsdatum der Rechnung', schluesselwoerter: 'datum' }),
+  });
+  assert.equal(ok.status, 201);
+  const regel = (await ok.json()).regel;
+  assert.equal(regel.art, 'feld');
+
+  const mitBed = await fetch(`${base}/api/rules`, {
+    method: 'POST',
+    headers: { ...headers(), ...json },
+    body: JSON.stringify({ name: 'Zahlungsmethode', art: 'feld', beschreibung: 'Wie bezahlt wurde', bedingung: 'eigener_name_adresse' }),
+  });
+  assert.equal(mitBed.status, 400);
+  assert.match((await mitBed.json()).fehler, /Felder/);
+
+  // aufräumen: die späteren Tests erwarten exakt 5 Regeln
+  const del = await fetch(`${base}/api/rules/${regel.id}`, { method: 'DELETE', headers: headers() });
+  assert.equal(del.status, 200);
   const liste = await (await fetch(`${base}/api/rules`, { headers: headers() })).json();
   assert.equal(liste.regeln.length, 5);
 });
@@ -921,6 +1025,38 @@ test('Server: KI-Ergebnis gültig → 200, Vorschlag gespeichert', async () => {
   const inDb = getDocument(db, dok1Id);
   assert.equal(inDb.status, 'einzukategorisieren');
   assert.equal(JSON.parse(inDb.klassifizierung).dokumenttyp.name, 'Rechnung');
+});
+
+test('Server: Klassifizierung mit Feld-Regel → felder extrahiert, Prompt enthält Feld', async () => {
+  const regel = await fetch(`${base}/api/rules`, {
+    method: 'POST',
+    headers: { ...headers(), ...json },
+    body: JSON.stringify({ name: 'Rechnungsdatum', art: 'feld', beschreibung: 'Das Ausstellungsdatum der Rechnung', schluesselwoerter: 'datum' }),
+  });
+  assert.equal(regel.status, 201);
+  const regelId = (await regel.json()).regel.id;
+
+  fakeOmlx.state.inhalt = JSON.stringify({
+    ...GUELTIG,
+    felder: [
+      { name: 'Rechnungsdatum', wert: '2026-10-31' },
+      { name: 'Quatsch', wert: 'x' }, // nicht im Regel-Set → verworfen
+    ],
+  });
+  const r = await fetch(`${base}/api/documents/${dok1Id}/klassifizieren`, { method: 'POST', headers: headers() });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.deepEqual(body.dokument.klassifizierung.felder, [{ name: 'Rechnungsdatum', wert: '2026-10-31' }]);
+  assert.ok(body.dokument.klassifizierung.verworfen.some((v) => v.includes('Quatsch') && v.includes('Regel-Set')));
+
+  // Prompt: die Feld-Regel kam mit, inkl. Extraktion-Anweisung
+  const promptText = fakeOmlx.state.lastBody.messages[1].content;
+  assert.ok(promptText.includes('- Rechnungsdatum (Feld)'));
+  assert.ok(promptText.includes('"felder"'));
+
+  // aufräumen: spätere Tests erwarten das Regel-Set ohne Feld
+  const del = await fetch(`${base}/api/rules/${regelId}`, { method: 'DELETE', headers: headers() });
+  assert.equal(del.status, 200);
 });
 
 test('Server: bestaetigen → Status klassifiziert; ohne Vorschlag → 409', async () => {

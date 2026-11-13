@@ -238,12 +238,14 @@ export function deleteDocument(db, id) {
 
 /* -------------------------------- Regeln -------------------------------- */
 /* Regeln sind Daten, kein Code (konzept.md): sie leben in der DB und werden
-   in der App bearbeitet. Zwei Tag-Arten, ein Modell:
-   art: 'kategorie' (Thema) | 'dokumenttyp' (Rechnung, Angebot, …).
+   in der App bearbeitet. Drei Arten, ein Modell:
+   art: 'kategorie' (Thema) | 'dokumenttyp' (Rechnung, Angebot, …)
+        | 'feld' (zu extrahierendes Feld, z. B. Rechnungsdatum, Zahlungsmethode).
    bedingung: optional 'eigener_name_adresse' (deterministisch geprüft). */
 
-export const REGEL_ARTEN = ['kategorie', 'dokumenttyp'];
+export const REGEL_ARTEN = ['kategorie', 'dokumenttyp', 'feld'];
 export const REGEL_BEDINGUNGEN = ['eigener_name_adresse'];
+export const REGEL_ART_LABEL = { kategorie: 'Kategorie', dokumenttyp: 'Dokumenttyp', feld: 'Feld' };
 
 function parseRegel(r) {
   if (!r) return null;

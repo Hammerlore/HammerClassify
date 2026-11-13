@@ -14,7 +14,7 @@ import {
   openDb, deleteSession, deleteSessionByToken, deleteSessionsExceptPasskey,
   addDocument, getDocument, listDocuments, findDocumentBySha, deleteDocument,
   listRegeln, getRegel, addRegel, updateRegel, deleteRegel,
-  REGEL_ARTEN, REGEL_BEDINGUNGEN,
+  REGEL_ARTEN, REGEL_BEDINGUNGEN, REGEL_ART_LABEL,
   saveKlassifizierung, bestaetigeKlassifizierung, ablehneKlassifizierung,
   getSetting, setSetting,
 } from './db.js';
@@ -366,6 +366,7 @@ export function createApp(config) {
     if (!REGEL_ARTEN.includes(art)) fehler.push(`„art“: ${REGEL_ARTEN.join(' | ')}`);
     if (!beschreibung || beschreibung.length > 2000) fehler.push('„beschreibung“: 1–2000 Zeichen');
     if (bedingung && !REGEL_BEDINGUNGEN.includes(bedingung)) fehler.push(`„bedingung“: ${REGEL_BEDINGUNGEN.join(' | ')} oder leer`);
+    if (bedingung && art === 'feld') fehler.push('„bedingung“: gilt nur für Kategorien und Dokumenttypen, nicht für Felder');
     return { fehler, werte: { name, art, beschreibung, schluesselwoerter, bedingung, beispiel } };
   };
 
@@ -378,7 +379,7 @@ export function createApp(config) {
     if (fehler.length) return res.status(400).json({ fehler: fehler.join('; ') });
     // Doppelter Name (gleiche Art) → verwirrt die KI und die Schema-Prüfung
     const doppelt = listRegeln(config.db).some((r) => r.art === werte.art && r.name.toLowerCase() === werte.name.toLowerCase());
-    if (doppelt) return res.status(409).json({ fehler: `Es gibt bereits eine ${werte.art} mit dem Namen „${werte.name}“` });
+    if (doppelt) return res.status(409).json({ fehler: `Es gibt bereits eine Regel mit dem Namen „${werte.name}“ (${REGEL_ART_LABEL[werte.art] ?? werte.art})` });
     res.status(201).json({ regel: addRegel(config.db, werte) });
   });
 
@@ -389,7 +390,7 @@ export function createApp(config) {
     const { fehler, werte } = regelFelder(req.body);
     if (fehler.length) return res.status(400).json({ fehler: fehler.join('; ') });
     const doppelt = listRegeln(config.db).some((r) => r.id !== id && r.art === werte.art && r.name.toLowerCase() === werte.name.toLowerCase());
-    if (doppelt) return res.status(409).json({ fehler: `Es gibt bereits eine ${werte.art} mit dem Namen „${werte.name}“` });
+    if (doppelt) return res.status(409).json({ fehler: `Es gibt bereits eine Regel mit dem Namen „${werte.name}“ (${REGEL_ART_LABEL[werte.art] ?? werte.art})` });
     res.json({ regel: updateRegel(config.db, id, werte) });
   });
 

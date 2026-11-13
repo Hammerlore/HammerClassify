@@ -831,8 +831,8 @@ $('#search').addEventListener('input', renderDocs);
    Zwei Tag-Arten (kategorie, dokumenttyp), optional die Bedingung
    „eigener_name_adresse" — die wird serverseitig deterministisch geprüft. */
 
-const REGEL_ART_LABEL = { kategorie: 'Kategorie', dokumenttyp: 'Dokumenttyp' };
-const REGEL_ART_KLASSE = { kategorie: 'kat-teal', dokumenttyp: 'kat-violett' };
+const REGEL_ART_LABEL = { kategorie: 'Kategorie', dokumenttyp: 'Dokumenttyp', feld: 'Feld' };
+const REGEL_ART_KLASSE = { kategorie: 'kat-teal', dokumenttyp: 'kat-violett', feld: 'kat-blau' };
 
 function renderRules() {
   const host = $('#rules-list');
@@ -865,7 +865,9 @@ function renderRules() {
   if (sub) {
     const k = regeln.filter((r) => r.art === 'kategorie').length;
     const t = regeln.filter((r) => r.art === 'dokumenttyp').length;
-    sub.textContent = `${regeln.length} Regeln · ${k} Kategorien, ${t} Dokumenttypen — Regeln sind Daten in der Datenbank, eine neue Regel gilt sofort`;
+    const f = regeln.filter((r) => r.art === 'feld').length;
+    const feldTeil = f ? `, ${f} Felder` : '';
+    sub.textContent = `${regeln.length} Regeln · ${k} Kategorien, ${t} Dokumenttypen${feldTeil} — Regeln sind Daten in der Datenbank, eine neue Regel gilt sofort`;
   }
 }
 
@@ -882,9 +884,17 @@ function openRuleForm(rule) {
   f.schluesselwoerter.value = rule ? rule.schluesselwoerter.join(', ') : '';
   f.bedingung.value = rule?.bedingung ?? '';
   f.beispiel.value = rule?.beispiel ?? '';
+  bedingungSichtbar(f.art.value);
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   f.elements['name'].focus();
 }
+
+// Bedingung (eigener Name/Adresse) betrifft nur Tags — bei Feldern ausblenden.
+function bedingungSichtbar(art) {
+  $('#r-bed-field').hidden = art === 'feld';
+  if (art === 'feld') $('#regel-form').bedingung.value = '';
+}
+$('#r-art').addEventListener('change', (e) => bedingungSichtbar(e.target.value));
 
 async function loescheRegel(rule) {
   if (!confirm(`Regel „${rule.name}“ wirklich löschen?`)) return;
@@ -1007,6 +1017,16 @@ function renderDocTags() {
   const teile = [];
   if (k?.dokumenttyp) teile.push(tagBlock('dokumenttyp', k.dokumenttyp.name, k.dokumenttyp.konfidenz));
   for (const kat of k?.kategorien ?? []) teile.push(tagBlock('kategorie', kat.name, kat.konfidenz, kat.stellen));
+  if (k?.felder?.length) {
+    teile.push(`
+      <div class="tag-block">
+        <div class="tag-chip" data-art="feld">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Extrahierte Felder</span>
+        </div>
+        <dl class="felder felder-ki">${k.felder.map((f) => `<dt>${esc(f.name)}</dt><dd>${esc(f.wert)}</dd>`).join('')}</dl>
+      </div>`);
+  }
   if (!teile.length) {
     host.innerHTML = '<p class="dist-empty">Noch keine Tags — „Neu klassifizieren" unten: die KI schlägt vor, dann bestätigen oder ablehnen.</p>';
     return;
@@ -1173,6 +1193,7 @@ $('#btn-export').addEventListener('click', () => {
   if (k.absender) md.push(`| Absender | ${k.absender} |`);
   if (k.datum) md.push(`| Datum | ${k.datum} |`);
   for (const b of k.betraege ?? []) md.push(`| Betrag (${b.art}) | ${euro(b.wert_cents)} |`);
+  for (const f of k.felder ?? []) md.push(`| ${f.name} | ${f.wert} |`);
   if (k.beleg_erforderlich != null) md.push(`| Beleg erforderlich | ${k.beleg_erforderlich ? 'ja' : 'nein'} |`);
   if (k.kern) md.push(`| Worum geht es | ${k.kern} |`);
   md.push('', '## Volltext', '', d.text ? '```\n' + d.text + '\n```' : '_Kein Text (Scan?)_', '');
