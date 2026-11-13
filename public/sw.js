@@ -1,10 +1,11 @@
 /* HammerClassify — Service Worker (Caching der App-Shell) */
 'use strict';
-const CACHE = 'hammerclassify-v3';
+const CACHE = 'hammerclassify-v4';
 const SHELL = [
   '/', '/index.html', '/app.js', '/webauthn.js', '/app.css',
   '/hlsw-base.css', '/design-tokens.css', '/design-fonts.css', '/manifest.webmanifest',
-  '/icons/favicon.svg',
+  '/icons/favicon.svg', '/icons/favicon.ico', '/icons/apple-touch-icon.png',
+  '/icons/logo-32.png', '/icons/logo-128.png', '/icons/logo-192.png', '/icons/logo-512.png', '/icons/logo-maskable-512.png',
   '/inter-latin-400-normal.woff2', '/inter-latin-500-normal.woff2',
   '/inter-latin-600-normal.woff2', '/inter-latin-700-normal.woff2',
   '/jetbrains-mono-latin-400-normal.woff2', '/jetbrains-mono-latin-500-normal.woff2',

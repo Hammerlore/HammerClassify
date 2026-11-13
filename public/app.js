@@ -97,6 +97,7 @@ async function refreshDocs() {
     docs = [];
   }
   renderDashboard();
+  renderFilters(); // Kategorie-Dropdown hängt an den aktuellen Dokumenten
   renderDocs();
   zaeleNav();
 }
@@ -732,6 +733,158 @@ $('#inhauber-form').addEventListener('submit', async (e) => {
 
 let filterStatus = null;
 
+/* Liste: Sortierung per Spaltenkopf, Suchfeld über alle Einträge, Kategorie-Filter
+   mit Mehrfachauswahl, Spalten ein-/ausblendbar. Sortierung und Spaltenwahl bleiben
+   im Browser (localStorage); auch der Kategorie-Filter wird gespeichert. */
+const SPALTEN = [
+  { key: 'dokument', label: 'Dokument' },
+  { key: 'kategorie', label: 'Kategorie' },
+  { key: 'absender', label: 'Absender' },
+  { key: 'datum', label: 'Datum', num: true },
+  { key: 'betrag', label: 'Betrag', num: true },
+  { key: 'status', label: 'Status' },
+  { key: 'text', label: 'Text' },
+];
+const LISTE_KEY = 'hc-dokliste-v1';
+const listeState = {
+  sort: { key: null, dir: 1 }, // key null = Server-Reihenfolge (neueste zuerst)
+  kategorie: new Set(),        // Mehrfachauswahl, ODER-Logik
+  spalten: new Set(),          // ausgeblendete Spalten
+};
+(function ladeListeState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LISTE_KEY) || 'null');
+    if (!s) return;
+    if (s.sort?.key && SPALTEN.some((x) => x.key === s.sort.key)) listeState.sort = { key: s.sort.key, dir: s.sort.dir === -1 ? -1 : 1 };
+    if (Array.isArray(s.kategorie)) listeState.kategorie = new Set(s.kategorie.filter((x) => typeof x === 'string'));
+    if (Array.isArray(s.spalten)) listeState.spalten = new Set(s.spalten.filter((k) => SPALTEN.some((x) => x.key === k)));
+  } catch { /* defekter Zustand → Defaults */ }
+})();
+function speichereListeState() {
+  try {
+    localStorage.setItem(LISTE_KEY, JSON.stringify({ sort: listeState.sort, kategorie: [...listeState.kategorie], spalten: [...listeState.spalten] }));
+  } catch { /* Speicher nicht verfügbar — nicht kritisch */ }
+}
+
+// Kategorie-Filter: Mehrfachauswahl aus den Kategorien, die in den Dokumenten
+// vorkommen (mit Zählern). ODER-Logik: ein Treffer genügt. Der Dropdown bleibt
+// beim Haken offen — nur Badge und „Alle" werden neu gesetzt, damit man mehrere
+// Kategorien in Ruhe abhaken kann.
+function kategorieDropdown() {
+  const dd = document.createElement('div');
+  dd.className = 'dropdown';
+  const btn = document.createElement('button');
+  btn.className = 'filter-chip dropdown-btn';
+  btn.type = 'button';
+  const panel = document.createElement('div');
+  panel.className = 'dropdown-panel';
+  let alleCb = null;
+  const einzeln = [];
+  const zaehler = new Map();
+  for (const d of docs) for (const k of d.klassifizierung?.kategorien ?? []) zaehler.set(k.name, (zaehler.get(k.name) ?? 0) + 1);
+  const namen = [...zaehler.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de'));
+  const aktualisiere = () => {
+    btn.innerHTML = `Kategorien${listeState.kategorie.size ? ` <span class="cnt">${listeState.kategorie.size}</span>` : ''}<span class="caret" aria-hidden="true"></span>`;
+    if (alleCb) alleCb.checked = !listeState.kategorie.size;
+    for (const e of einzeln) e.cb.checked = listeState.kategorie.has(e.name);
+  };
+  if (!namen.length) {
+    const leer = document.createElement('span');
+    leer.className = 'dropdown-leer';
+    leer.textContent = 'Noch keine Kategorien — erst klassifizieren.';
+    panel.appendChild(leer);
+  } else {
+    const alle = document.createElement('label');
+    alle.className = 'dropdown-item dropdown-alle';
+    alleCb = document.createElement('input');
+    alleCb.type = 'checkbox';
+    alleCb.addEventListener('change', () => {
+      listeState.kategorie = new Set(alleCb.checked ? [] : namen.map(([n]) => n));
+      speichereListeState();
+      aktualisiere();
+      renderDocs();
+    });
+    alle.append(alleCb, document.createTextNode('Alle'));
+    panel.appendChild(alle);
+    for (const [name, n] of namen) {
+      const lab = document.createElement('label');
+      lab.className = 'dropdown-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.addEventListener('change', () => {
+        if (cb.checked) listeState.kategorie.add(name);
+        else listeState.kategorie.delete(name);
+        speichereListeState();
+        aktualisiere();
+        renderDocs();
+      });
+      const cnt = document.createElement('span');
+      cnt.className = 'cnt';
+      cnt.textContent = String(n);
+      lab.append(cb, document.createTextNode(name), cnt);
+      panel.appendChild(lab);
+      einzeln.push({ name, cb });
+    }
+  }
+  aktualisiere();
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dd.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(dd.classList.contains('open')));
+  });
+  dd.append(btn, panel);
+  return dd;
+}
+
+// Spalten ein-/ausblenden: Auswahl bleibt im Browser.
+function spaltenDropdown() {
+  const dd = document.createElement('div');
+  dd.className = 'dropdown';
+  const btn = document.createElement('button');
+  btn.className = 'filter-chip dropdown-btn';
+  btn.type = 'button';
+  const panel = document.createElement('div');
+  panel.className = 'dropdown-panel';
+  const aktualisiere = () => {
+    btn.innerHTML = `Spalten${listeState.spalten.size ? ` <span class="cnt">${listeState.spalten.size}</span>` : ''}<span class="caret" aria-hidden="true"></span>`;
+  };
+  for (const s of SPALTEN) {
+    const lab = document.createElement('label');
+    lab.className = 'dropdown-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !listeState.spalten.has(s.key);
+    cb.addEventListener('change', () => {
+      if (cb.checked) listeState.spalten.delete(s.key);
+      else listeState.spalten.add(s.key);
+      speichereListeState();
+      aktualisiere();
+      renderDocs();
+    });
+    lab.append(cb, document.createTextNode(s.label));
+    panel.appendChild(lab);
+  }
+  aktualisiere();
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dd.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(dd.classList.contains('open')));
+  });
+  dd.append(btn, panel);
+  return dd;
+}
+
+// Klick außerhalb oder Escape schließt offene Dropdowns
+function schließeDropdowns(ausgenommen = null) {
+  for (const dd of $$('.dropdown.open')) {
+    if (dd === ausgenommen || dd.contains(ausgenommen)) continue;
+    dd.classList.remove('open');
+    dd.querySelector('.dropdown-btn')?.setAttribute('aria-expanded', 'false');
+  }
+}
+document.addEventListener('click', (e) => schließeDropdowns(e.target));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') schließeDropdowns(); });
+
 function renderFilters() {
   const host = $('#filters');
   host.innerHTML = '';
@@ -755,6 +908,8 @@ function renderFilters() {
       renderDocs();
     }));
   }
+  host.appendChild(kategorieDropdown());
+  host.appendChild(spaltenDropdown());
 }
 
 function statusBadge(d) {
@@ -771,29 +926,78 @@ function textBadge(d) {
 // Kurze Anzeige der Klassifizierung für die Tabellen
 const katKurz = (d) => d.klassifizierung?.kategorien?.map((k) => esc(k.name)).join(', ') || '';
 const typKurz = (d) => d.klassifizierung?.dokumenttyp?.name ? esc(d.klassifizierung.dokumenttyp.name) : '';
-const betragKurz = (d) => {
-  const b = d.klassifizierung?.betraege?.find((x) => x.art === 'brutto') ?? d.klassifizierung?.betraege?.[0];
-  return b ? `${(b.wert_cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €` : '';
+
+// Zellen der Dokumenten-Tabelle — Reihenfolge und Sichtbarkeit steuert SPALTEN.
+const zelle = {
+  dokument: (d) => `<td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${fmtSize(d.size)}</span></a></td>`,
+  kategorie: (d) => `<td>${katKurz(d) || '<span class="leer-zelle">—</span>'}</td>`,
+  absender: (d) => `<td>${d.klassifizierung?.absender ? esc(d.klassifizierung.absender) : '<span class="leer-zelle">—</span>'}</td>`,
+  datum: (d) => `<td class="num">${d.klassifizierung?.datum ? fmtDate(d.klassifizierung.datum) : '<span class="leer-zelle">—</span>'}</td>`,
+  betrag: (d) => {
+    const b = d.klassifizierung?.betraege?.find((x) => x.art === 'brutto') ?? d.klassifizierung?.betraege?.[0];
+    return `<td class="num">${b ? `${(b.wert_cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €` : '<span class="leer-zelle">—</span>'}</td>`;
+  },
+  status: (d) => `<td>${statusBadge(d)}</td>`,
+  text: (d) => `<td>${textBadge(d)}</td>`,
 };
 
-function docRow(d, compact) {
+// Sortierung: leere Werte immer zuletzt, unabhängig von der Richtung.
+const statusReihenfolge = Object.keys(STATUS);
+const sortTextSpalten = new Set(['dokument', 'kategorie', 'absender']);
+const sortWert = {
+  dokument: (d) => d.name,
+  kategorie: (d) => (d.klassifizierung?.kategorien ?? []).map((k) => k.name).join(', '),
+  absender: (d) => d.klassifizierung?.absender ?? '',
+  datum: (d) => (d.klassifizierung?.datum ? Date.parse(d.klassifizierung.datum) : null),
+  betrag: (d) => {
+    const b = d.klassifizierung?.betraege?.find((x) => x.art === 'brutto') ?? d.klassifizierung?.betraege?.[0];
+    return b?.wert_cents ?? null;
+  },
+  status: (d) => { const i = statusReihenfolge.indexOf(d.status); return i === -1 ? statusReihenfolge.length : i; },
+  text: (d) => ({ ok: 0, kein_text: 1 }[d.text_status] ?? 2),
+};
+function sortiere(liste) {
+  const { key, dir } = listeState.sort;
+  if (!key) return liste; // Server-Reihenfolge: created_at DESC
+  const wert = sortWert[key];
+  return [...liste].sort((a, b) => {
+    let wa = wert(a), wb = wert(b);
+    if (sortTextSpalten.has(key)) { wa = wa || null; wb = wb || null; }
+    if (wa == null && wb == null) return 0;
+    if (wa == null) return 1;
+    if (wb == null) return -1;
+    return (sortTextSpalten.has(key) ? String(wa).localeCompare(String(wb), 'de') : wa - wb) * dir;
+  });
+}
+
+// Suche über alle Einträge: Titel, Typ, Vorschau, Absender, Tags, extrahierte
+// Felder, Status.
+function suchHay(d) {
+  const k = d.klassifizierung ?? {};
+  return [
+    d.name, d.ext, d.text_vorschau ?? '', k.absender ?? '', k.dokumenttyp?.name ?? '',
+    (k.kategorien ?? []).map((x) => x.name).join(' '),
+    (k.felder ?? []).map((f) => `${f.name} ${f.wert}`).join(' '),
+    STATUS[d.status]?.label ?? d.status,
+  ].join(' ').toLowerCase();
+}
+
+function kategorieFilter(d) {
+  if (!listeState.kategorie.size) return true;
+  const kat = new Set((d.klassifizierung?.kategorien ?? []).map((k) => k.name.toLowerCase()));
+  for (const k of listeState.kategorie) if (kat.has(k.toLowerCase())) return true;
+  return false;
+}
+
+// Dashboard („Letzte Dokumente"): vier feste Spalten, keine Sortierung.
+function docRow(d) {
   const tr = document.createElement('tr');
   tr.className = 'klick';
-  const kategorieZellen = `<td>${katKurz(d) || '<span class="leer-zelle">—</span>'}</td>`;
-  tr.innerHTML = compact
-    ? `
-    <td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${typKurz(d) || d.ext.toUpperCase()}</span></a></td>
-    ${kategorieZellen}
-    <td>${statusBadge(d)}</td>
-    <td class="num">${fmtDate(d.created_at)}</td>`
-    : `
-    <td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${fmtSize(d.size)}</span></a></td>
-    ${kategorieZellen}
-    <td>${d.klassifizierung?.absender ? esc(d.klassifizierung.absender) : '<span class="leer-zelle">—</span>'}</td>
-    <td class="num">${d.klassifizierung?.datum ? fmtDate(d.klassifizierung.datum) : '<span class="leer-zelle">—</span>'}</td>
-    <td class="num">${betragKurz(d) || '<span class="leer-zelle">—</span>'}</td>
-    <td>${statusBadge(d)}</td>
-    <td>${textBadge(d)}</td>`;
+  tr.innerHTML = `
+  <td class="titel"><a class="t-link" href="#dokument/${d.id}"><span class="t-main">${esc(d.name)}</span><span class="t-sub">${typKurz(d) || d.ext.toUpperCase()}</span></a></td>
+  <td>${katKurz(d) || '<span class="leer-zelle">—</span>'}</td>
+  <td>${statusBadge(d)}</td>
+  <td class="num">${fmtDate(d.created_at)}</td>`;
   tr.addEventListener('click', (e) => {
     if (e.target.closest('button, input, select, a')) return;
     location.hash = `#dokument/${d.id}`;
@@ -801,23 +1005,61 @@ function docRow(d, compact) {
   return tr;
 }
 
+function renderDocsHeader() {
+  const thead = $('#docs-tbody')?.closest('table')?.querySelector('thead');
+  if (!thead) return;
+  const tr = document.createElement('tr');
+  for (const s of SPALTEN) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    if (s.num) th.classList.add('num');
+    if (listeState.spalten.has(s.key)) th.classList.add('col-aus');
+    const aktiv = listeState.sort.key === s.key;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'th-sort' + (aktiv ? ' aktiv' : '');
+    btn.innerHTML = `<span>${s.label}</span><span class="sort-ind" data-dir="${aktiv ? listeState.sort.dir : 0}" aria-hidden="true"></span>`;
+    btn.setAttribute('aria-label', `Nach ${s.label} sortieren`);
+    btn.addEventListener('click', () => {
+      if (aktiv) listeState.sort.dir *= -1;
+      else listeState.sort = { key: s.key, dir: 1 };
+      speichereListeState();
+      renderDocs();
+    });
+    th.appendChild(btn);
+    tr.appendChild(th);
+  }
+  thead.replaceChildren(tr);
+}
+
 function renderDocs() {
+  renderDocsHeader();
   const tbody = $('#docs-tbody');
   tbody.innerHTML = '';
   const q = ($('#search').value || '').toLowerCase();
-  const list = docs.filter((d) => {
+  const list = sortiere(docs.filter((d) => {
     if (filterStatus && d.status !== filterStatus) return false;
-    if (q) {
-      const k = d.klassifizierung ?? {};
-      const hay = `${d.name} ${d.text_vorschau ?? ''} ${k.absender ?? ''} ${(k.kategorien ?? []).map((x) => x.name).join(' ')} ${k.dokumenttyp?.name ?? ''}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
+    if (!kategorieFilter(d)) return false;
+    if (q && !suchHay(d).includes(q)) return false;
     return true;
-  });
-  for (const d of list) tbody.appendChild(docRow(d, false));
+  }));
+  const sichtbare = SPALTEN.filter((s) => !listeState.spalten.has(s.key));
+  for (const d of list) {
+    const tr = document.createElement('tr');
+    tr.className = 'klick';
+    tr.innerHTML = sichtbare.map((s) => zelle[s.key](d)).join('');
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('button, input, select, a')) return;
+      location.hash = `#dokument/${d.id}`;
+    });
+    tbody.appendChild(tr);
+  }
   if (!list.length) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="7" class="leer"><p>${docs.length ? 'Keine Dokumente gefunden.' : 'Noch keine Dokumente — oben hochladen.'}</p></td>`;
+    const msg = !docs.length ? 'Noch keine Dokumente — oben hochladen.'
+      : !sichtbare.length ? 'Alle Spalten ausgeblendet — über „Spalten" wieder einblenden.'
+        : 'Keine Dokumente gefunden.';
+    tr.innerHTML = `<td colspan="${Math.max(sichtbare.length, 1)}" class="leer"><p>${msg}</p></td>`;
     tbody.appendChild(tr);
   }
   const sub = $('#docs-sub');
