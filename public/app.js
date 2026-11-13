@@ -336,12 +336,16 @@ function pageText(items) {
     cur = '';
   };
   for (const it of items) {
-    if (it.hasEOL) { flush(); lastY = null; continue; }
-    if (!it.str) continue;
-    const y = it.transform ? it.transform[5] : null;
-    if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) flush();
-    cur += it.str; // pdf.js trägt Zeilenabstände bereits in str
-    lastY = y ?? lastY;
+    if (it.str) {
+      const y = it.transform ? it.transform[5] : null;
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) flush();
+      cur += it.str; // pdf.js trägt Zeilenabstände bereits in str
+      lastY = y ?? lastY;
+    }
+    // hasEOL = „nach diesem Text folgt ein Zeilenumbruch": str erst anhängen,
+    // dann die Zeile abschließen. (Vorher: flush+continue → Text ging verloren,
+    // z. B. Namen/Adressen in Apple-Rechnungen.)
+    if (it.hasEOL) { flush(); lastY = null; }
   }
   flush();
   return lines.join('\n');

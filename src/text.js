@@ -73,9 +73,11 @@ export async function extractDocxText(buffer) {
  */
 export async function extractPdfText(buffer) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  let loadingTask;
   let doc;
   try {
-    doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+    loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+    doc = await loadingTask.promise;
   } catch {
     return ''; // defektes PDF → „kein_text“ → manuell (kein Crash)
   }
@@ -92,17 +94,23 @@ export async function extractPdfText(buffer) {
         cur = '';
       };
       for (const it of items) {
-        if (it.hasEOL) { flush(); lastY = null; continue; }
-        if (!it.str) continue;
-        const y = it.transform ? it.transform[5] : null;
-        if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) flush();
-        cur += it.str;
-        lastY = y ?? lastY;
+        if (it.str) {
+          const y = it.transform ? it.transform[5] : null;
+          if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) flush();
+          cur += it.str;
+          lastY = y ?? lastY;
+        }
+        // hasEOL = „nach diesem Text folgt ein Zeilenumbruch“: str erst
+        // anhängen, dann die Zeile abschließen. (Vorher: flush+continue →
+        // Text ging verloren, z. B. Namen/Adressen in Apple-Rechnungen.)
+        if (it.hasEOL) { flush(); lastY = null; }
       }
       flush();
     }
   } finally {
-    await doc.destroy();
+    // pdf.js v6: destroy() liegt auf der LoadingTask, nicht auf dem
+    // PDFDocumentProxy (doc.destroy() wäre ein TypeError).
+    await loadingTask.destroy().catch(() => {});
   }
   return lines.join('\n').trim();
 }

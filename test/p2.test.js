@@ -17,7 +17,7 @@ import JSZip from 'jszip';
 import { openDb, createNutzer, addPasskey, findDocumentBySha, getDocument, SCHEMA_STAND } from '../src/db.js';
 import * as auth from '../src/auth.js';
 import { createApp } from '../src/server.js';
-import { extractDocxText, extractZipText, extractFromDocumentXml, decodeXmlEntities, validateZip } from '../src/text.js';
+import { extractDocxText, extractZipText, extractFromDocumentXml, decodeXmlEntities, validateZip, extractPdfText } from '../src/text.js';
 
 /* ------------------- Fake-Authenticator (wie p1.test.js) ---------------- */
 
@@ -146,6 +146,51 @@ const fakePdf = Buffer.concat([
   Buffer.from('trailer\n<< /Root 1 0 R >>\n%%EOF\n'),
 ]);
 
+/**
+ * Minimale PDF mit 5 Zeilen, die durch `T*` + `TL` (Leading 20 > Schriftgröße 12)
+ * auf verschiedenen Y-Positionen liegen. pdf.js erkennt den Y-Sprung und markiert
+ * die ersten vier Zeilen mit `hasEOL=true` — genau der Fall, bei dem die alte
+ * pageText-Logik (flush+continue) den Text verlor (z. B. Namen/Adressen in
+ * Apple-Rechnungen). Helvetica ist Base-14 (nicht eingebettet): die
+ * standardFontDataUrl-Warnung ist für die Text-Extraktion harmlos.
+ */
+function makeMultiLinePdf() {
+  const content = [
+    'BT',
+    '/F1 12 Tf',
+    '20 TL',
+    '72 700 Td',
+    '(Rechnung) Tj',
+    'T*',
+    '(Michael Tiedtke) Tj',
+    'T*',
+    '(Leggewiestr. 83) Tj',
+    'T*',
+    '(45359 ESSEN) Tj',
+    'T*',
+    '(GERMANY) Tj',
+    'ET',
+  ].join('\n');
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let pdf = '%PDF-1.7\n';
+  const offsets = [];
+  for (let i = 0; i < objs.length; i++) {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${objs[i]}\nendobj\n`;
+  }
+  const xrefPos = pdf.length;
+  pdf += 'xref\n0 6\n0000000000 65535 f \n';
+  for (const off of offsets) pdf += `${String(off).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
+}
+
 /* -------------------------------- Setup --------------------------------- */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hammerclassify-p2-'));
@@ -227,6 +272,21 @@ test('text: zip mit docx → Text; zip ohne docx → leer', async () => {
 test('text: defektes Zip → validateZip meldet Fehler', async () => {
   const fehler = await validateZip(Buffer.from('kein zip, nur text'));
   assert.match(fehler, /Zip-Archiv/);
+});
+
+test('text: pdf — hasEOL-Zeilen bleiben erhalten (Namen/Adressen)', async () => {
+  // Regression: die alte pageText-Logik (flush+continue bei hasEOL) verlor
+  // genau diese Zeilen — nur „GERMANY" blieb. Jetzt müssen alle fünf da sein.
+  const text = await extractPdfText(makeMultiLinePdf());
+  const zeilen = text.split('\n');
+  for (const z of ['Rechnung', 'Michael Tiedtke', 'Leggewiestr. 83', '45359 ESSEN', 'GERMANY']) {
+    assert.ok(zeilen.includes(z), `Zeile fehlt: ${z} → ${JSON.stringify(zeilen)}`);
+  }
+  assert.equal(zeilen.length, 5, 'fünf Zeilen, nicht zusammengezogen');
+});
+
+test('text: pdf — defektes PDF → leerer String, kein Crash', async () => {
+  assert.equal(await extractPdfText(Buffer.from('kein pdf, nur text')), '');
 });
 
 /* --------------------------------- DB ----------------------------------- */
