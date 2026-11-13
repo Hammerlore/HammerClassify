@@ -1,12 +1,15 @@
 /* ==========================================================================
-   HammerClassify — Textgewinnung (P2)
+   HammerClassify — Textgewinnung (P2, seit P4 auch serverseitig)
    - .docx = ZIP: word/document.xml lesen, <w:t>-Knoten zu Text zusammenziehen
    - .zip  = Office-Export: erste .docx-Datei im Paket extrahieren
-   - .pdf  = der Browser extrahiert mit pdf.js und schickt den Text mit —
-     der Server braucht keine PDF-Library (konzept.md §Datenfluss)
-   Keine nativen Abhängigkeiten, kein LibreOffice.
+   - .pdf  = Upload: der Browser extrahiert mit pdf.js; Scan: pdfjs-dist
+     (Legacy-Build) serverseitig — keine nativen Abhängigkeiten
+   - .doc  = binäres Word: optional via LibreOffice (soffice), wenn installiert
    ========================================================================== */
 import JSZip from 'jszip';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 
 /** Häufige XML-Entities entschlüsseln (docx-Text ist XML-escaped). */
 export function decodeXmlEntities(s) {
@@ -61,6 +64,86 @@ export async function extractDocxText(buffer) {
   const entry = zip.file('word/document.xml');
   if (!entry) return '';
   return extractFromDocumentXml(await entry.async('string'));
+}
+
+/**
+ * .pdf (Buffer) → Volltext, serverseitig (pdfjs-dist, Legacy-Build für Node).
+ * Nur für den Scan nötig: Uploads extrahiert der Browser. Die Zeilenlogik
+ * spiegelt die des Browsers (app.js pageText): hasEOL + Y-Sprung = neue Zeile.
+ */
+export async function extractPdfText(buffer) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  let doc;
+  try {
+    doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  } catch {
+    return ''; // defektes PDF → „kein_text“ → manuell (kein Crash)
+  }
+  const lines = [];
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const { items } = await page.getTextContent();
+      let cur = '';
+      let lastY = null;
+      const flush = () => {
+        const l = cur.trim();
+        if (l) lines.push(l);
+        cur = '';
+      };
+      for (const it of items) {
+        if (it.hasEOL) { flush(); lastY = null; continue; }
+        if (!it.str) continue;
+        const y = it.transform ? it.transform[5] : null;
+        if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) flush();
+        cur += it.str;
+        lastY = y ?? lastY;
+      }
+      flush();
+    }
+  } finally {
+    await doc.destroy();
+  }
+  return lines.join('\n').trim();
+}
+
+/* .doc (binäres Word): braucht LibreOffice. Wenn `soffice` nicht installiert
+   ist (Standard auf dem Pi), liefert die Funktion '' — das Dokument landet
+   in „manuell" (konzept.md Offener Punkt 4: selten → wartet auf OCR/V2). */
+
+let sofficePfadCache;
+export function sofficePfad() {
+  if (sofficePfadCache !== undefined) return sofficePfadCache;
+  try {
+    sofficePfadCache = execFileSync('which', ['soffice'], { encoding: 'utf8' }).trim() || null;
+  } catch {
+    sofficePfadCache = null;
+  }
+  return sofficePfadCache;
+}
+
+export async function extractDocText(buffer, tmpDir) {
+  const pfad = sofficePfad();
+  if (!pfad) return '';
+  const { spawn } = await import('node:child_process');
+  const work = mkdtempSync(path.join(tmpDir, 'soffice-'));
+  const src = path.join(work, 'input.doc');
+  writeFileSync(src, buffer, { mode: 0o600 });
+  try {
+    await new Promise((resolve, reject) => {
+      const p = spawn(pfad, ['--headless', '--convert-to', 'txt:Text', '--outdir', work, src], {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      const timer = setTimeout(() => p.kill('SIGKILL'), 60_000);
+      p.on('error', reject);
+      p.on('close', (code) => { clearTimeout(timer); code === 0 ? resolve() : reject(new Error(`soffice Exit ${code}`)); });
+    });
+    return readFileSync(path.join(work, 'input.txt'), 'utf8').trim();
+  } catch {
+    return ''; // defekte .doc → manuell
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 }
 
 /** .zip (Buffer) → Volltext der ersten .docx-Datei darin. */

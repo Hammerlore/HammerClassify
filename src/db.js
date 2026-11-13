@@ -9,7 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 
-export const SCHEMA_STAND = 5;
+export const SCHEMA_STAND = 6;
 
 const MIGRATIONEN = {
   1: `
@@ -86,6 +86,30 @@ const MIGRATIONEN = {
     CREATE INDEX IF NOT EXISTS idx_rules_art ON rules(art);
     ALTER TABLE documents ADD COLUMN klassifizierung TEXT;
     ALTER TABLE documents ADD COLUMN klassifiziert_am TEXT;
+  `,
+   // P4: Scan-Quellen (lokal / rclone) + Dedup-Cache + Aufbewahrungs-Tag.
+   // Die App liest nur Pfade, die hier gepflegt sind — nie freie Pfade (konzept.md).
+   6: `
+    CREATE TABLE IF NOT EXISTS sources (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      name         TEXT NOT NULL UNIQUE,
+      typ          TEXT NOT NULL CHECK (typ IN ('lokal', 'rclone')),
+      pfad         TEXT NOT NULL,
+      aktiv        INTEGER NOT NULL DEFAULT 1,
+      letzte_scan  TEXT
+    );
+    CREATE TABLE IF NOT EXISTS scan_seen (
+      source_id  INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      pfad       TEXT NOT NULL,
+      size       INTEGER NOT NULL,
+      modtime    TEXT NOT NULL,
+      sha256     TEXT NOT NULL,
+      PRIMARY KEY (source_id, pfad)
+    );
+    ALTER TABLE documents ADD COLUMN source_id INTEGER REFERENCES sources(id) ON DELETE SET NULL;
+    ALTER TABLE documents ADD COLUMN quellpfad TEXT;
+    ALTER TABLE documents ADD COLUMN halte_bis INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source_id);
   `,
 };
 
@@ -203,12 +227,12 @@ export function deleteSessionsExceptPasskey(db, userId, keepPasskeyId) {
 
 /* ------------------------------- Dokumente ----------------------------- */
 
-export function addDocument(db, { name, ext, mime, size, sha256, text, textStatus }) {
+export function addDocument(db, { name, ext, mime, size, sha256, text, textStatus, sourceId = null, quellpfad = null, halteBis = null }) {
   const jetzt = new Date().toISOString();
   const id = db.prepare(`INSERT INTO documents
-    (name, ext, mime, size, sha256, status, text, text_status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'eingang', ?, ?, ?, ?)`)
-    .run(name, ext, mime, size, sha256, text, textStatus, jetzt, jetzt)
+    (name, ext, mime, size, sha256, status, text, text_status, created_at, updated_at, source_id, quellpfad, halte_bis)
+    VALUES (?, ?, ?, ?, ?, 'eingang', ?, ?, ?, ?, ?, ?, ?)`)
+    .run(name, ext, mime, size, sha256, text, textStatus, jetzt, jetzt, sourceId, quellpfad, halteBis)
     .lastInsertRowid;
   return getDocument(db, id);
 }
@@ -234,6 +258,84 @@ export function countDocuments(db, status = null) {
 
 export function deleteDocument(db, id) {
   return db.prepare('DELETE FROM documents WHERE id = ?').run(id).changes;
+}
+
+/* ------------------------------ Quellen (P4) ---------------------------- */
+/* Scan-Quellen: die App liest nur Pfade, die hier gepflegt sind, nie freie
+   Pfade (konzept.md §Offene Punkte 3). Zwei Typen:
+     'lokal'  — Pfad auf dem Pi (z. B. Nextcloud-Datenverzeichnis)
+     'rclone' — Remote-Pfad (z. B. onedrive:16 Bank) */
+
+export const SOURCE_TYPEN = ['lokal', 'rclone'];
+
+export function listSources(db) {
+  return db.prepare(`
+    SELECT s.*,
+      (SELECT COUNT(*) FROM documents d WHERE d.source_id = s.id AND d.status = 'eingang') AS neu,
+      (SELECT COUNT(*) FROM documents d WHERE d.source_id = s.id) AS gesamt
+    FROM sources s ORDER BY s.name`).all();
+}
+
+export function getSource(db, id) {
+  return db.prepare('SELECT * FROM sources WHERE id = ?').get(id);
+}
+
+export function addSource(db, { name, typ, pfad }) {
+  const id = db.prepare(`INSERT INTO sources (name, typ, pfad, aktiv) VALUES (?, ?, ?, 1)`)
+    .run(name, typ, pfad).lastInsertRowid;
+  return getSource(db, id);
+}
+
+export function updateSource(db, id, { name, typ, pfad, aktiv }) {
+  const s = getSource(db, id);
+  if (!s) return false;
+  db.prepare(`UPDATE sources SET name = ?, typ = ?, pfad = ?, aktiv = ? WHERE id = ?`)
+    .run(name ?? s.name, typ ?? s.typ, pfad ?? s.pfad, aktiv === undefined ? s.aktiv : aktiv ? 1 : 0, id);
+  return true;
+}
+
+export function deleteSource(db, id) {
+  return db.prepare('DELETE FROM sources WHERE id = ?').run(id).changes;
+}
+
+export function setzeLetzterScan(db, id, iso) {
+  db.prepare('UPDATE sources SET letzte_scan = ? WHERE id = ?').run(iso, id);
+}
+
+/* Dedup-Cache pro Quelle: (Pfad, Größe, ModTime) → SHA-256.
+   Unveränderte Dateien werden beim Neuscan nicht erneut heruntergeladen/gehasht. */
+
+export function seenGet(db, sourceId, pfad) {
+  return db.prepare('SELECT * FROM scan_seen WHERE source_id = ? AND pfad = ?').get(sourceId, pfad);
+}
+
+export function seenUpsert(db, { sourceId, pfad, size, modtime, sha256 }) {
+  db.prepare(`INSERT INTO scan_seen (source_id, pfad, size, modtime, sha256) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(source_id, pfad) DO UPDATE SET size = excluded.size, modtime = excluded.modtime, sha256 = excluded.sha256`)
+    .run(sourceId, pfad, size, modtime, sha256);
+}
+
+/* --------------------------- Aufbewahrung (P4) --------------------------- */
+/* Offener Punkt 6: Beleg-Charakter → 10-Jahre-Aufbewahrung. Die Liste der
+   Dokumenttypen mit Haltepflicht ist eine Einstellung (z. B. „Rechnung,
+   Vertrag"); beim Klassifizieren wird das Jahr + 10 am Dokument vermerkt. */
+
+export const HALTE_JAHRE = 10;
+
+export function halteTypen(db) {
+  return (getSetting(db, 'halte_typen') ?? '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+export function halteBisFuer(db, dokumenttypName, jetzt = new Date()) {
+  if (!dokumenttypName) return null;
+  const typen = halteTypen(db);
+  if (!typen.some((t) => t.toLowerCase() === dokumenttypName.toLowerCase())) return null;
+  return jetzt.getFullYear() + HALTE_JAHRE;
+}
+
+export function setzeHalteBis(db, id, jahr) {
+  db.prepare('UPDATE documents SET halte_bis = ? WHERE id = ?').run(jahr, id);
 }
 
 /* -------------------------------- Regeln -------------------------------- */

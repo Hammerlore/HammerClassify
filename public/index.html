@@ -32,6 +32,7 @@
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></symbol>
     <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
     <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8L20 3M16 7l3 3M14 9l2 2"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
@@ -129,6 +130,7 @@
             </div>
             <div class="row">
               <label class="suche"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><input type="search" id="search" placeholder="Suche: Titel, Text, Absender, Tag, Feld, Status …" aria-label="Dokumente durchsuchen"></label>
+              <button class="hlsw-btn hlsw-btn--ghost" id="btn-csv" type="button"><svg class="i" aria-hidden="true"><use href="#i-export"/></svg><span>CSV</span></button>
               <button class="hlsw-btn hlsw-btn--accent" data-open-upload type="button"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span>Hochladen</span></button>
             </div>
           </div>
@@ -217,33 +219,24 @@
           <div class="v-head">
             <div>
               <h1>Scan</h1>
-              <p class="v-sub">Pfad scannen · die KI klassifiziert die neuen Dokumente im Hintergrund — der echte Scan kommt mit P4</p>
+              <p class="v-sub" id="scan-sub">Quellen scannen · neue Dokumente landen im Eingang — die Dateien bleiben an ihrem Ursprungsort</p>
             </div>
+            <button class="hlsw-btn hlsw-btn--accent" id="btn-scan-alle" type="button"><svg class="i" aria-hidden="true"><use href="#i-scan"/></svg><span>Alle Quellen scannen</span></button>
           </div>
 
           <div class="scan-grid">
             <div class="hlsw-card">
-              <div class="card-h"><h2>Gescannte Pfade</h2></div>
-              <div class="pfad-row">
-                <span class="pfad-path">/media/ncadmin/nextcloud/Posteingang</span>
-                <span class="pfad-count">14 neu</span>
-                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="nextcloud" type="button">Jetzt scannen</button>
-              </div>
-              <div class="pfad-row">
-                <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Post</span>
-                <span class="pfad-count">2 neu</span>
-                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="post" type="button">Jetzt scannen</button>
-              </div>
-              <div class="pfad-row">
-                <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Finanzen</span>
-                <span class="pfad-count">aktuell</span>
-                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="finanzen" type="button">Jetzt scannen</button>
-              </div>
-              <div class="pfad-row">
-                <span class="pfad-path">/media/ncadmin/nextcloud/Eigene/Verträge</span>
-                <span class="pfad-count">aktuell</span>
-                <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan-pfad="vertraege" type="button">Jetzt scannen</button>
-              </div>
+              <div class="card-h"><h2>Quellen</h2></div>
+              <div id="pfad-list"></div>
+              <form class="quelle-form" id="quelle-form">
+                <input type="text" name="name" placeholder="Name (z. B. Bank)" required maxlength="60">
+                <select name="typ" aria-label="Quellen-Typ">
+                  <option value="lokal">lokal (Pfad auf dem Pi)</option>
+                  <option value="rclone">rclone (Remote)</option>
+                </select>
+                <input type="text" name="pfad" placeholder="/mnt/nvme/… oder onedrive:16 Bank" required>
+                <button class="hlsw-btn hlsw-btn--ghost btn-sm" type="submit">Hinzufügen</button>
+              </form>
             </div>
 
             <div class="hlsw-card">
@@ -308,6 +301,20 @@
                 </div>
               </form>
               <span class="hlsw-hint">Dient der Regel-Bedingung „eigener Name/Adresse" — der Server prüft deterministisch, ob Name oder Adresse im Dokument vorkommen. Bleibt auf dem hammerpi (Datenbank), nie im Repo.</span>
+            </div>
+
+            <div class="hlsw-card">
+              <div class="card-h"><h2>Aufbewahrung</h2></div>
+              <form id="halte-form">
+                <div class="hlsw-field">
+                  <label for="halte-typen">Dokumenttypen mit 10-Jahre-Haltepflicht</label>
+                  <input id="halte-typen" name="typen" type="text" placeholder="z. B. Rechnung, Vertrag" autocomplete="off">
+                  <span class="hlsw-hint">Kommagetrennt. Klassifizierte Dokumente mit einem dieser Typen werden mit dem Aufbewahrungsjahr (Klassifizierung + 10) markiert — Offener Punkt 6 (Beleg-Charakter).</span>
+                </div>
+                <div class="form-actions">
+                  <button class="hlsw-btn hlsw-btn--accent" type="submit"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Speichern</span></button>
+                </div>
+              </form>
             </div>
 
             <div class="hlsw-card">

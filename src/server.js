@@ -6,6 +6,7 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import Busboy from 'busboy';
@@ -17,23 +18,27 @@ import {
   REGEL_ARTEN, REGEL_BEDINGUNGEN, REGEL_ART_LABEL,
   saveKlassifizierung, bestaetigeKlassifizierung, ablehneKlassifizierung,
   getSetting, setSetting,
+  listSources, getSource, addSource, updateSource, deleteSource,
+  SOURCE_TYPEN, halteBisFuer, setzeHalteBis, halteTypen,
 } from './db.js';
 import * as auth from './auth.js';
 import * as text from './text.js';
 import { omlxKonfig, omlxPruefe, omlxKlassifiziere } from './omlx.js';
 import { pruefeErgebnis, parseErgebnisText } from './ergebnis.js';
 import { bauePrompt } from './prompt.js';
+import * as scan from './scan.js';
 
 /* ------------------------------ Upload --------------------------------- */
 const MAX_DATEI = 25 * 1024 * 1024; // konzept.md: Upload-Quoten 25 MB
 const MAX_TEXT = 2_000_000; // Obergrenze für den gespeicherten Volltext
-const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip', 'txt', 'md']);
+const ERLAUBTE_EXT = new Set(['pdf', 'docx', 'zip', 'txt', 'md', 'doc']);
 const MIME = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   zip: 'application/zip',
   txt: 'text/plain',
   md: 'text/markdown',
+  doc: 'application/msword',
 };
 
 export function createApp(config) {
@@ -203,7 +208,7 @@ export function createApp(config) {
         const name = sanitizeName(datei.filename);
         const ext = (name.split('.').pop() || '').toLowerCase();
         if (!ERLAUBTE_EXT.has(ext)) {
-          return res.status(400).json({ fehler: `Dateityp nicht erlaubt: .${ext} (nur .pdf, .docx, .zip, .txt, .md)` });
+          return res.status(400).json({ fehler: `Dateityp nicht erlaubt: .${ext} (nur .pdf, .docx, .zip, .txt, .md, .doc)` });
         }
         // Deterministische Plausibilitätsprüfung, bevor etwas gespeichert wird
         if (ext === 'pdf' && !/^%PDF/.test(datei.buffer.subarray(0, 1024).toString('latin1').trimStart())) {
@@ -228,6 +233,7 @@ export function createApp(config) {
           if (ext === 'docx') textInhalt = await text.extractDocxText(datei.buffer);
           else if (ext === 'zip') textInhalt = await text.extractZipText(datei.buffer);
           else if (ext === 'pdf') textInhalt = (textFeld ?? '').trim();
+          else if (ext === 'doc') textInhalt = await text.extractDocText(datei.buffer, os.tmpdir());
           else textInhalt = datei.buffer.toString('utf8').trim(); // txt, md: Klartext direkt
         } catch {
           textInhalt = ''; // defektes/unvollständiges Archiv → manuell
@@ -249,6 +255,38 @@ export function createApp(config) {
   app.get('/api/documents', requireSession, (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
     res.json({ dokumente: listDocuments(config.db, { limit }).map(ohneText) });
+  });
+
+  /* ----------------------------- CSV-Export (P4) -------------------------- */
+  // Semikolon-Trennung (deutsches Excel), UTF-8 mit BOM für korrekte Umlaute.
+  // WICHTIG: vor /api/documents/:id registrieren — sonst fängt „:id" den
+  // Pfad „export.csv" ab (Express matcht in Registrier-Reihenfolge).
+
+  const csvZelle = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  app.get('/api/documents/export.csv', requireSession, (req, res) => {
+    const docs = listDocuments(config.db, { limit: 5000 });
+    const zeilen = [['Datei', 'Typ', 'Größe', 'Status', 'Dokumenttyp', 'Kategorien', 'Absender', 'Datum', 'Betrag', 'Quelle', 'Quellpfad', 'Aufbewahren bis', 'SHA-256', 'Erstellt']];
+    for (const d of docs) {
+      const k = d.klassifizierung ? JSON.parse(d.klassifizierung) : {};
+      const betrag = (k.betraege ?? []).find((b) => b.art === 'brutto') ?? k.betraege?.[0];
+      zeilen.push([
+        d.name, d.ext, d.size, d.status,
+        k.dokumenttyp?.name ?? '',
+        (k.kategorien ?? []).map((x) => x.name).join('; '),
+        k.absender ?? '', k.datum ?? '',
+        betrag ? (betrag.wert_cents / 100).toFixed(2) : '',
+        d.source_id ? (getSource(config.db, d.source_id)?.name ?? '') : '',
+        d.quellpfad ?? '', d.halte_bis ?? '', d.sha256, d.created_at,
+      ]);
+    }
+    const csv = '\uFEFF' + zeilen.map((z) => z.map(csvZelle).join(';')).join('\r\n');
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="hammerclassify-dokumente-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
   });
 
   app.get('/api/documents/:id', requireSession, (req, res) => {
@@ -333,6 +371,21 @@ export function createApp(config) {
       key: (typeof key === 'string' && key.trim()) ? key.trim() : eff.key,
     };
     res.json(await omlxPruefe(zuTesten.url, zuTesten.key));
+  });
+
+  /* --------------------------- Aufbewahrung (P4) ------------------------- */
+  // Offener Punkt 6: Dokumenttypen mit 10-Jahre-Haltepflicht (Beleg-Charakter).
+  // Kommagetrennte Liste; beim Klassifizieren wird das Jahr + 10 vermerkt.
+
+  app.get('/api/halte', requireSession, (req, res) => {
+    res.json({ typen: halteTypen(config.db) });
+  });
+
+  app.put('/api/halte', requireSession, (req, res) => {
+    const { typen } = req.body ?? {};
+    if (typeof typen !== 'string') return res.status(400).json({ fehler: '„typen“ (String) wird erwartet' });
+    setSetting(config.db, 'halte_typen', typen.trim() || null);
+    res.json({ typen: halteTypen(config.db) });
   });
 
   /* ------------------------------ KI-Status ----------------------------- */
@@ -530,6 +583,9 @@ export function createApp(config) {
       }
 
       saveKlassifizierung(config.db, dok.id, { ...ergebnis, verworfen });
+      // Aufbewahrung (Offener Punkt 6): Beleg-Charakter → 10 Jahre
+      const halt = halteBisFuer(config.db, ergebnis.dokumenttyp?.name);
+      if (halt) setzeHalteBis(config.db, dok.id, halt);
       res.json({ dokument: ohneText(getDocument(config.db, dok.id)), verworfen, ki });
     } catch (e) {
       next(e);
@@ -555,7 +611,77 @@ export function createApp(config) {
     res.json({ dokument: ohneText(getDocument(config.db, dok.id)) });
   });
 
-  /* --------------------------- Statische Seite -------------------------- */
+  /* ------------------------------ Quellen (P4) --------------------------- */
+  // Die App liest nur Pfade, die hier gepflegt sind — nie freie Pfade
+  // (konzept.md §Offene Punkte 3). Zwei Typen: 'lokal' (Pfad auf dem Pi)
+  // und 'rclone' (Remote, z. B. onedrive:16 Bank).
+
+  const pfadPruefen = (typ, pfad) => {
+    if (typeof pfad !== 'string' || !pfad.trim()) return 'Pfad fehlt.';
+    const p = pfad.trim();
+    if (p.includes('\0')) return 'Ungültiger Pfad.';
+    if (typ === 'lokal') {
+      if (!p.startsWith('/')) return 'Lokaler Pfad muss absolut sein (z. B. /mnt/nvme/nextcloud/data/Micha/files).';
+      if (p.split('/').includes('..')) return 'Keine „.." im Pfad erlaubt.';
+    } else if (typ === 'rclone') {
+      if (!/^[a-z0-9_-]+:.+/i.test(p)) return 'Rclone-Pfad mit Remote, z. B. onedrive:16 Bank';
+    }
+    return null;
+  };
+
+  app.get('/api/sources', requireSession, (req, res) => {
+    res.json({ quellen: listSources(config.db) });
+  });
+
+  app.post('/api/sources', requireSession, (req, res) => {
+    const { name, typ, pfad } = req.body ?? {};
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ fehler: 'Name fehlt.' });
+    if (!SOURCE_TYPEN.includes(typ)) return res.status(400).json({ fehler: `Typ muss „lokal" oder „rclone" sein.` });
+    const fehler = pfadPruefen(typ, pfad);
+    if (fehler) return res.status(400).json({ fehler });
+    try {
+      const q = addSource(config.db, { name: name.trim(), typ, pfad: pfad.trim() });
+      res.status(201).json({ quelle: q });
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ fehler: `Quelle „${name}" existiert bereits.` });
+      throw e;
+    }
+  });
+
+  app.put('/api/sources/:id', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    const q = id && getSource(config.db, id);
+    if (!q) return res.status(404).json({ fehler: 'Quelle nicht gefunden' });
+    const { name, typ, pfad, aktiv } = req.body ?? {};
+    const neuerTyp = typ ?? q.typ;
+    const neuerPfad = pfad ?? q.pfad;
+    if (typ && !SOURCE_TYPEN.includes(typ)) return res.status(400).json({ fehler: `Typ muss „lokal" oder „rclone" sein.` });
+    const fehler = (typ || pfad) ? pfadPruefen(neuerTyp, neuerPfad) : null;
+    if (fehler) return res.status(400).json({ fehler });
+    if (!updateSource(config.db, id, { name, typ, pfad, aktiv })) return res.status(404).json({ fehler: 'Quelle nicht gefunden' });
+    res.json({ quelle: getSource(config.db, id) });
+  });
+
+  app.delete('/api/sources/:id', requireSession, (req, res) => {
+    const id = idFromParams(req);
+    if (!id || !deleteSource(config.db, id)) return res.status(404).json({ fehler: 'Quelle nicht gefunden' });
+    res.json({ ok: true });
+  });
+
+  /* ------------------------------- Scan (P4) ----------------------------- */
+
+  app.post('/api/scan', requireSession, (req, res) => {
+    const { sourceId, alle } = req.body ?? {};
+    const fehler = scan.starteScan(config.db, config, { sourceId: Number(sourceId) || null });
+    if (fehler) return res.status(409).json({ fehler });
+    res.status(202).json({ gestartet: true, status: scan.scanStatus });
+  });
+
+  app.get('/api/scan/status', requireSession, (req, res) => {
+    res.json({ status: scan.scanStatus });
+  });
+
+    /* --------------------------- Statische Seite -------------------------- */
 
   const pub = path.join(APP_ROOT, 'public');
   app.use(express.static(pub, { index: 'index.html' }));

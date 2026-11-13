@@ -1,6 +1,6 @@
 /* HammerClassify — Service Worker (Caching der App-Shell) */
 'use strict';
-const CACHE = 'hammerclassify-v4';
+const CACHE = 'hammerclassify-v5';
 const SHELL = [
   '/', '/index.html', '/app.js', '/webauthn.js', '/app.css',
   '/hlsw-base.css', '/design-tokens.css', '/design-fonts.css', '/manifest.webmanifest',

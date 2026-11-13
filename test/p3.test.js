@@ -606,8 +606,8 @@ test('prompt: Feld-Regeln → Schema-Eintrag „felder" + Extraktion-Anweisung',
 /* ---------------------------------- DB ----------------------------------- */
 
 test('DB: Migration 5 — rules-Tabelle + Klassifizierung-Spalten', () => {
-  assert.equal(SCHEMA_STAND, 5);
-  assert.equal(db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v, 5);
+  assert.equal(SCHEMA_STAND, 6);
+  assert.equal(db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v, 6);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'rules'").get());
   const spalten = db.prepare('PRAGMA table_info(documents)').all().map((s) => s.name);
   assert.ok(spalten.includes('klassifizierung'));

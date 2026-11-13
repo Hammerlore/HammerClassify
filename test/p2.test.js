@@ -232,9 +232,9 @@ test('text: defektes Zip → validateZip meldet Fehler', async () => {
 /* --------------------------------- DB ----------------------------------- */
 
 test('DB: Migration 2 legt documents-Tabelle an', () => {
-  assert.equal(SCHEMA_STAND, 5);
+  assert.equal(SCHEMA_STAND, 6);
   const v = db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v;
-  assert.equal(v, 5);
+  assert.equal(v, 6);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'documents'").get());
 });
 

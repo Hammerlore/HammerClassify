@@ -309,7 +309,7 @@ function render() {
   if (v === 'uebersicht') renderDashboard();
   if (v === 'dokumente') renderDocs();
   if (v === 'regeln') renderRules();
-  if (v === 'scan') renderQueue();
+  if (v === 'scan') ladeQuellen();
   if (v === 'einstellungen') renderEinstellungen();
   if (v === 'dokument') {
     if (arg) openDoc(arg);
@@ -629,6 +629,7 @@ async function checkKi() {
 
 let omlxCfg = { url: null, key_gegeben: false, key_maskiert: null, quelle: null };
 let omlxStatus = null; // Ergebnis des letzten Verbindungstests
+let halteTypen = [];   // Dokumenttypen mit 10-Jahre-Haltepflicht (Offener Punkt 6)
 
 async function ladeOmlx() {
   try {
@@ -640,6 +641,7 @@ async function ladeOmlx() {
     const v = $('#sys-version');
     if (v) v.textContent = `${h.app} v${h.version}`;
   }).catch(() => { /* egal */ });
+  api('/api/halte').then((h) => { halteTypen = h.typen ?? []; renderEinstellungen(); }).catch(() => { /* egal */ });
   renderKiCard(); // Endpoint im Dashboard-Card aktualisieren
   renderEinstellungen();
 }
@@ -670,6 +672,13 @@ function renderEinstellungen() {
     $('#inhauber-status').textContent = (inhaber.name || inhaber.adresse)
       ? 'Gepflegt — Regeln mit der Bedingung „eigener Name/Adresse" werden geprüft.'
       : 'Nicht gepflegt — Regeln mit der Bedingung „eigener Name/Adresse" werden verworfen.';
+  }
+
+  // Aufbewahrung: Dokumenttypen mit 10-Jahre-Haltepflicht (Offener Punkt 6).
+  const hForm = $('#halte-form');
+  if (hForm) {
+    const el = hForm.elements['typen'];
+    if (document.activeElement !== el) el.value = halteTypen.join(', ');
   }
 }
 
@@ -727,6 +736,23 @@ $('#inhauber-form').addEventListener('submit', async (e) => {
   } catch (err) {
     fehlerToast(err);
   }
+});
+
+// Aufbewahrung: Dokumenttypen mit 10-Jahre-Haltepflicht speichern (Offener Punkt 6).
+$('#halte-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const btn = f.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/halte', { method: 'PUT', body: { typen: f.elements['typen'].value } });
+    halteTypen = r.typen ?? [];
+    toast(r.typen.length ? `Aufbewahrung: ${r.typen.join(', ')} → 10 Jahre.` : 'Aufbewahrung: keine Typen gesetzt.');
+    renderEinstellungen();
+  } catch (err) {
+    fehlerToast(err);
+  }
+  btn.disabled = false;
 });
 
 /* ------------------------------ Dokumente ------------------------------ */
@@ -1200,39 +1226,186 @@ $('#regel-form').addEventListener('submit', async (e) => {
 });
 
 /* -------------------------------- Scan --------------------------------- */
-/* Mock bis P4: Verzeichnis-Scan + Queue. */
+/* ------------------------------ Scan (P4) ------------------------------ */
+/* Echte Quellen (lokal / rclone) aus der DB + Warteschlange. Der Scan läuft
+   serverseitig im Hintergrund; der Client pollt den Fortschritt. Neue Dateien
+   landen in „Eingang" mit Quellbezug — die Originale bleiben unangetastet. */
 
-const QUEUE = [
-  { name: 'EON_Stromabrechnung_Q3_2026.pdf', state: 'Beispiel', prog: 100 },
-  { name: 'Gasabrechnung_2026-03.pdf', state: 'Beispiel', prog: 100 },
-  { name: 'Wasserabrechnung_Hammer.pdf', state: 'Beispiel', prog: 62 },
-  { name: 'Miete_Okt_2026.docx', state: 'Beispiel', prog: 8 },
-  { name: 'VHV_Versicherung_Jahresrechnung.pdf', state: 'Beispiel', prog: 0 },
-];
+let quellen = [];
+let scanStatus = { laufend: false, quelle: null, gesamt: 0, aktuell: 0, neu: 0, doppelungen: 0, uebersprungen: 0, fehler: 0, datei: null, beendet_am: null };
+let scanPoll = null;
 
-function renderQueue() {
-  const host = $('#queue-list');
-  host.innerHTML = '';
-  for (const q of QUEUE) {
-    const item = document.createElement('div');
-    item.className = 'queue-item';
-    item.innerHTML = `
-      <div>
-        <div class="queue-name">${esc(q.name)}</div>
-        <div class="queue-state">${esc(q.state)} — der echte Scan kommt mit P4</div>
-      </div>
-      <div class="progress"><span data-prog="${q.prog}"></span></div>`;
-    host.appendChild(item);
+async function ladeQuellen() {
+  try {
+    const r = await api('/api/sources');
+    quellen = r.quellen ?? [];
+  } catch {
+    quellen = [];
   }
-  // Breite per element.style: die CSP verbietet style-Attribute im Markup
-  requestAnimationFrame(() => { $$('#queue-list [data-prog]').forEach((s) => { s.style.width = `${s.dataset.prog}%`; }); });
+  // Laufenden Scan nicht verlieren: Status nachladen, Polling fortsetzen
+  try {
+    const s = await api('/api/scan/status');
+    scanStatus = s.status ?? scanStatus;
+  } catch { /* Server ohne Scan-Modul */ }
+  renderScan();
+  if (scanStatus.laufend) starteScanPolling();
 }
 
-$$('[data-scan-pfad]').forEach((b) => b.addEventListener('click', () => {
-  b.disabled = true;
-  b.textContent = 'Scanne …';
-  setTimeout(() => { b.disabled = false; b.textContent = 'Gescannt ✓'; }, 1400);
-}));
+function renderScan() {
+  renderQuellen();
+  renderQueue();
+}
+
+function renderQuellen() {
+  const host = $('#pfad-list');
+  if (!host) return;
+  host.innerHTML = '';
+  if (!quellen.length) {
+    const p = document.createElement('p');
+    p.className = 'dist-empty';
+    p.textContent = 'Noch keine Quellen — unten anlegen (lokal: Pfad auf dem Pi, rclone: Remote wie onedrive:16 Bank).';
+    host.appendChild(p);
+    return;
+  }
+  for (const q of quellen) {
+    const row = document.createElement('div');
+    row.className = 'pfad-row' + (q.aktiv ? '' : ' inaktiv');
+    const typLabel = q.typ === 'rclone' ? 'rclone' : 'lokal';
+    row.innerHTML = `
+      <div class="pfad-main">
+        <span class="pfad-name">${esc(q.name)}</span>
+        <span class="pfad-path" title="${esc(q.pfad)}">${esc(q.pfad)}</span>
+        <span class="pfad-meta">${typLabel}${q.letzte_scan ? ` · zuletzt ${fmtDateTime(q.letzte_scan)}` : ' · noch nicht gescannt'}</span>
+      </div>
+      <span class="pfad-count" data-neu="${q.neu}">${q.neu ? `${q.neu} neu` : 'aktuell'}</span>
+      <button class="hlsw-btn hlsw-btn--ghost btn-sm" data-scan="${q.id}" type="button" ${scanStatus.laufend ? 'disabled' : ''}>Jetzt scannen</button>
+      <button class="icon-btn" data-quelle-del="${q.id}" type="button" aria-label="Quelle löschen" title="Quelle löschen"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg></button>`;
+    host.appendChild(row);
+  }
+  $$('#pfad-list [data-scan]').forEach((b) => b.addEventListener('click', () => starteScan(Number(b.dataset.scan))));
+  $$('#pfad-list [data-quelle-del]').forEach((b) => b.addEventListener('click', () => loescheQuelle(Number(b.dataset.quelleDel))));
+}
+
+async function starteScan(sourceId = null) {
+  const btn = $('#btn-scan-alle');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/scan', { method: 'POST', body: { sourceId } });
+    scanStatus = r.status ?? scanStatus;
+    toast(sourceId ? 'Scan gestartet.' : 'Alle Quellen werden gescannt.');
+    renderScan();
+    starteScanPolling();
+  } catch (e) {
+    fehlerToast(e);
+    btn.disabled = false;
+  }
+}
+
+function starteScanPolling() {
+  if (scanPoll) return;
+  scanPoll = setInterval(async () => {
+    try {
+      const s = await api('/api/scan/status');
+      const warLaeuf = scanStatus.laufend;
+      scanStatus = s.status ?? scanStatus;
+      renderScan();
+      if (warLaeuf && !scanStatus.laufend) {
+        stoppeScanPolling();
+        ladeQuellen(); // Zähler + „zuletzt“ aktualisieren
+        refreshDocs(); // neue Dokumente → Liste, Dashboard, Kategorie-Filter
+        if (scanStatus.neu) toast(`Scan fertig: ${scanStatus.neu} neue Dokumente${scanStatus.fehler ? `, ${scanStatus.fehler} Fehler` : ''}.`);
+      }
+    } catch { /* Verbindung weg — beim nächsten Tick erneut */ }
+  }, 2500);
+}
+
+function stoppeScanPolling() {
+  if (scanPoll) { clearInterval(scanPoll); scanPoll = null; }
+  $('#btn-scan-alle')?.removeAttribute('disabled');
+}
+
+async function loescheQuelle(id) {
+  if (!confirm('Quelle wirklich löschen? Die Dokumente bleiben erhalten, der Quellbezug geht verloren.')) return;
+  try {
+    await api(`/api/sources/${id}`, { method: 'DELETE' });
+    toast('Quelle gelöscht.');
+    await ladeQuellen();
+  } catch (e) { fehlerToast(e); }
+}
+
+// Warteschlange: während des Scans der Fortschritt, danach die neuesten
+// Dokumente aus Quellen (mit Text- und Status-Badge).
+function renderQueue() {
+  const host = $('#queue-list');
+  if (!host) return;
+  host.innerHTML = '';
+
+  if (scanStatus.laufend) {
+    const pct = scanStatus.gesamt ? Math.round((scanStatus.aktuell / scanStatus.gesamt) * 100) : 0;
+    const item = document.createElement('div');
+    item.className = 'queue-item queue-scan';
+    item.innerHTML = `
+      <div>
+        <div class="queue-name">${esc(scanStatus.quelle ?? '')}</div>
+        <div class="queue-state">${esc(scanStatus.datei ?? 'Starte …')}</div>
+      </div>
+      <div class="progress"><span data-prog="${pct}"></span></div>`;
+    host.appendChild(item);
+    const summe = document.createElement('p');
+    summe.className = 'queue-summe';
+    summe.textContent = `${scanStatus.aktuell}/${scanStatus.gesamt} · ${scanStatus.neu} neu · ${scanStatus.doppelungen} bekannt · ${scanStatus.fehler} Fehler`;
+    host.appendChild(summe);
+    requestAnimationFrame(() => { const s = item.querySelector('[data-prog]'); if (s) s.style.width = `${pct}%`; });
+    return;
+  }
+
+  const ausQuellen = docs.filter((d) => d.source_id);
+  if (!ausQuellen.length) {
+    const p = document.createElement('p');
+    p.className = 'dist-empty';
+    p.textContent = scanStatus.beendet_am
+      ? `Keine neuen Dokumente beim letzten Scan (${fmtDateTime(scanStatus.beendet_am)}).`
+      : 'Noch nichts gescannt — „Jetzt scannen" bei einer Quelle.';
+    host.appendChild(p);
+    return;
+  }
+  for (const d of ausQuellen.slice(0, 20)) {
+    const item = document.createElement('div');
+    item.className = 'queue-item';
+    const s = STATUS[d.status] ?? { label: d.status };
+    const text = d.text_status === 'kein_text' ? 'Kein Text (Scan)' : d.text_status === 'ok' ? 'Text' : '—';
+    item.innerHTML = `
+      <div>
+        <div class="queue-name"><a href="#dokument/${d.id}">${esc(d.name)}</a></div>
+        <div class="queue-state">${esc(s.label)} · ${text}${d.quellpfad ? ` · ${esc(d.quellpfad)}` : ''}</div>
+      </div>
+      <span class="hlsw-badge ${s.klasse ?? 'hlsw-badge--neutral'}">${esc(s.label)}</span>`;
+    host.appendChild(item);
+  }
+}
+
+// Quelle anlegen (Formular in der Scan-Seite)
+$('#quelle-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = { name: f.elements['name'].value, typ: f.elements['typ'].value, pfad: f.elements['pfad'].value };
+  const btn = f.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await api('/api/sources', { method: 'POST', body });
+    f.reset();
+    toast('Quelle angelegt.');
+    await ladeQuellen();
+  } catch (err) {
+    fehlerToast(err);
+  }
+  btn.disabled = false;
+});
+
+// CSV-Export (Dokumente-Seite)
+$('#btn-csv')?.addEventListener('click', () => {
+  window.location.href = '/api/documents/export.csv';
+});
 
 /* ------------------------------ Dokument ------------------------------- */
 /* P3: Tags aus der Klassifizierung (Dokumenttyp, Kategorien mit Zitat-
@@ -1336,6 +1509,8 @@ function renderDocDetail() {
     <dt>SHA-256</dt><dd class="mono">${d.sha256.slice(0, 16)}…</dd>
     <dt>Status</dt><dd>${esc(s.label)}</dd>
     <dt>Text</dt><dd>${d.text ? `${d.text.length.toLocaleString('de-DE')} Zeichen` : 'kein Text (Scan?)'}</dd>
+    ${d.quellpfad ? `<dt>Quelle</dt><dd class="mono">${esc(d.quellpfad)}</dd>` : ''}
+    ${d.halte_bis ? `<dt>Aufbewahren bis</dt><dd>${d.halte_bis} (10 Jahre, Beleg-Charakter)</dd>` : ''}
     <dt>Hochgeladen</dt><dd>${fmtDateTime(d.created_at)}</dd>`;
 
   const text = $('#doc-text');
@@ -1461,7 +1636,7 @@ renderDashboard();
 renderFilters();
 renderDocs();
 renderRules();
-renderQueue();
+ladeQuellen();
 zaeleNav();
 if (!location.hash) location.hash = '#uebersicht';
 else render();

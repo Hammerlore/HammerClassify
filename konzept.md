@@ -230,7 +230,7 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
 | **P1: Gerüst** | Repo aus `hlsw-pwa-template` + Management-Server (Passkey, Session, CSP, DB, `data/`, pm2, Apache, Backup) | Anmelden per Passkey auf `classify.lan.hammerlore.de` möglich |
 | **P2: Upload + Text** | Upload PDF/DOCX, Textgewinnung (jszip / pdf.js), Eintrag eingang, Vorschau, Deduplication | 3 echte Dokumente hochladen, Volltext readable |
 | **P3: Regeln + KI** | Regeln-UI, Prompt-Renderer, OMLX-Client, Schema-Prüfung, Bestätigung/ablehnen, „Neu einordnen" | 20 echte Dokumente ≥ 80 % treffend (manuell abgeglichen), 0 unbekannte Tags |
-| **P4: Scan + CSV** | Verzeichnis-Scan (Quellen: lokale Pfade auf dem Pi, OneDrive per rclone, Nextcloud-Datenverzeichnis — siehe Integration), Queue, CSV-Export, Darstellung; classify hält die Metadaten, die Dateien bleiben am Ursprungsort | Verzeichnis mit 50 Dateien vollständig durchlaufen |
+| **P4: Scan + CSV** (umgesetzt 13.11.2026) | Verzeichnis-Scan über gepflegte Quellen (lokal auf dem Pi, rclone-Remote — siehe Integration), Dedup-Cache (Größe+ModTime→SHA), Queue mit Fortschritt, CSV-Export, Quellbezug in Liste/Details; classify hält die Metadaten, die Dateien bleiben am Ursprungsort | Verzeichnis mit 50 Dateien vollständig durchlaufen |
 | **P5: Dokumenten-Karte** (später) | Visueller Graph/Treemap aus Kategorien + Regeln: wo welche Dokumente liegen, filterbar nach Kategorie/Typ/Quelle — reine Metadaten-Ansicht, Dateien rühren nicht an | Karte zeigt den gescannten Korpus, Filter nach Kategorie, Typ und Quelle |
 | **P6: Restrukturierung** (noch später) | Benennung + Umstrukturierung von Dokumenten an einem neuen Ort (z. B. Nextcloud) auf Basis der classify-Metadaten, mit Log | Ein gewählter Ordner wird regelkonform umbenannt/umsortiert, jede Aktion protokolliert |
 
@@ -285,13 +285,17 @@ Primitiv, ein Akzent pro Ansicht, 44px-Feld, Ring bei Fokus.
    (classify als `ncadmin` mit Lese-ACL), (b) OneDrive (Personal) per rclone-
    Remote `onedrive:`. Die App liest nur Pfade, die in der DB gepflegt sind,
    nie freie Pfade. Details: §Integration oben.
-4. **Word-Rohe:** Sind neben `.docx` auch `.doc` (binär) zu erwarten?
-   `.doc` braucht LibreOffice — wenn selten, fällt es in „manuell" und wartet
-   auf OCR/V2.
+4. **Word-Rohe: entschieden (13.11.2026).** `.doc` ist erlaubt (Upload + Scan).
+   Mit installiertem LibreOffice wird der Text per `soffice --headless`
+   extrahiert; ohne (aktuell auf dem Pi) landet das Dokument in „kein Text"
+   → manuell. Selten genug, dass sich die ~1 GB Installation nicht lohnt —
+   nachrüsten, falls es in der Praxis häufiger vorkommt.
 5. **Inhaber-Profile:** welche Namen/Adressen/Kundennummern sollen
    vorgepflegt sein? (wird in `.env`/DB, nie im Repo)
-6. **Rechts-Bezug:** sollen klassifizierte Dokumente 10-Jahre-Aufbewahrung
-   automatisch taggen? (Beleg-Charakter bei Rechnungen der Selbständigkeit)
+6. **Rechts-Bezug: umgesetzt (13.11.2026, P4).** Einstellungen → „Aufbewahrung"
+   hält die Typen mit Haltepflicht (kommagetrennt, z. B. „Rechnung, Vertrag").
+   Beim Klassifizieren wird `halte_bis = Jahr + 10` am Dokument vermerkt
+   (Details + CSV-Spalte „Aufbewahren bis").
 
 ## Notizen aus dem HLSW-Bestand (entscheidungsrelevant)
 
